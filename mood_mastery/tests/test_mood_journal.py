@@ -40,7 +40,6 @@ def mj_create_entry_test():
     print(mj1.entries_dict)
     print("Mood Journal entry of id " + entry1_id + " successfully created and added.")
     print("Mood Journal Create Entry Test Passed")
-    pass
 
 def mj_edit_entry_test():
     mj1 = Mood_Journal()
