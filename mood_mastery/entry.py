@@ -37,7 +37,7 @@ class Entry:
         - entry_body : str      // The body/main text of a user's entry
         - ranking : int         // The ranking assigned to the entry by a user (TODO: describe valid range ^ see line 12)
         """
-        self.entry_id_str = uuid.uuid4() # Generating a unique id for the entry
+        self.entry_id_str = str(uuid.uuid4()) # Generating a unique id for the entry
         self.entry_name = entry_name
         self.entry_date = date(entry_year,entry_month,entry_day)
         self.entry_body = entry_body

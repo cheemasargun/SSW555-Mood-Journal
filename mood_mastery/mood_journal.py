@@ -29,26 +29,41 @@ in entry.py and mood_journal.py
 
 from extensions import db
 from datetime import datetime
+from mood_mastery.entry import Entry
 
 class Mood_Journal:
     # Attributes (TO BE UPDATED) (if we need attributes here, really)
+    entries_dict = {}
 
     def __init__(self):
         # TODO
         # This is likely where we'll try to get the database file/instance, or create one if it doesn't exist
         # we can work on this together to get it set up and then be able to create tests.
 
-        # In the meantime, maybe just creating a dictionary or JSON file to store all of the entries could be good
+        # In the meantime, maybe just creating a dictionary to store all of the entries could be good
         # so we can at least test the general logic of the methods in entry.py and some kind of implementation for
         # delete_entry, even if not specifically for a database just yet
-        pass
+        
+        self.entries_dict = {}
 
-    def delete_entry(entry_id: int):
+    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int):
+        new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking)
+        new_entry_id = new_entry.entry_id_str
+        self.entries_dict[new_entry_id] = new_entry
+        return new_entry_id
+
+    def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int):
+        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking)
+
+    def mj_delete_entry(entry_id: int):
         # TODO
         # I imagine this would search for an entry's unique id and remove it from the database.
 
-        # We can probably have this implemented using a dictionary or JSON file if the database might take
+        # We can probably have this implemented using a dictionary if the database might take
         # a sec to understand/get set up properly.
 
-        # We can work together on making this database-based
+        # We can work together on making this database-based later
+
+        # In the meantime: use the del statement to delete the entry of the given entry_id from
+        # self.entries_dict // example of formatting: del my_dict[id]
         pass
