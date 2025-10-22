@@ -66,8 +66,25 @@ class Entry:
 
         Returns string with ranking's associated emoji
         """
-        # TODO
-        pass
+        toReturn = ""
+        match self.ranking:
+            case 1:
+                toReturn = b'\\0001f60e'
+            case 2:
+                toReturn = b'\\0001f621'
+            case 3:
+                toReturn = b'\\0001f628'
+            case 4:
+                toReturn = b'\\0001f62d'
+            case 5:
+                toReturn = b'\\0001f63c'
+            case 6:
+                toReturn = b'\\0001f922'
+            case 7:
+                toReturn = b'\\0001fae0'
+            case 8:
+                toReturn = b'\\0001fae9'
+        return toReturn.decode('unicode_escape')
 
     
         
