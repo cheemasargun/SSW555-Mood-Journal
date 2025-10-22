@@ -60,6 +60,31 @@ def mj_delete_entry_test():
     # TODO: create a Mood_Journal object, make two entries using the mj_create_entry function,
     #       call the mj_delete_entry function with one of their ids, and assert that the length of your
     #       Mood_Journal object is now one.
+   
+    mj1 = Mood_Journal()
+
+    # Create two entries
+    id1 = mj1.mj_create_entry("Test Entry 1", 10, 1, 2025, "First", 5)
+    id2 = mj1.mj_create_entry("Test Entry 2", 11, 1, 2025, "Second", 7)
+
+    # Make sure there are two entries in the dictionary
+    assert len(mj1.entries_dict) == 2
+
+    # Delete one entry
+    deleted = mj1.mj_delete_entry(id1)
+    
+    assert deleted is True, "mj_delete_entry should return True when deletion succeeds"
+    assert id1 not in mj1.entries_dict, "Deleted entry should be removed from entries_dict"
+    assert len(mj1.entries_dict) == 1, "After deleting one, exactly one entry should remain"
+
+    # Ensure the other entry is untouched
+    assert id2 in mj1.entries_dict, "Non-deleted entry should still exist"
+
+    # Deleting a non-existent entry should return False
+    deleted_missing = mj1.mj_delete_entry("does-not-exist")
+    assert deleted_missing is False, "Deleting a missing ID should return False"
+
+    print("Mood Journal Delete Entry Test Passed")
     pass
 
 create_entry_test()
@@ -67,3 +92,4 @@ edit_entry_test()
 determine_ranking_emoji_test()
 mj_create_entry_test()
 mj_edit_entry_test()
+mj_delete_entry_test()
