@@ -29,9 +29,10 @@ def edit_entry_test():
 
 """Determine Ranking Emoji Test"""
 def determine_ranking_emoji_test():
-    # TODO: make an entry, call the determine_ranking_emoji function on the entry, and assert that the expected
-    #       emoji for that entry's ranking is returned.
-    pass
+    e1 = Entry("Test Entry 3", 1, 1, 1, "awesome", 1)
+    assert e1.determine_ranking_emoji() == (b'\\U0001f60e').decode('unicode_escape')
+    print("Entry of id " + e1.entry_id_str + " successfully edited.")
+    print("Edit Entry Test Passed")
 
 def mj_create_entry_test():
     mj1 = Mood_Journal()
