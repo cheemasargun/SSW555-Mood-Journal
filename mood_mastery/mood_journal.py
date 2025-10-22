@@ -56,7 +56,6 @@ class Mood_Journal:
         (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking)
 
     def mj_delete_entry(entry_id: int):
-        # TODO
         # I imagine this would search for an entry's unique id and remove it from the database.
 
         # We can probably have this implemented using a dictionary if the database might take
@@ -66,4 +65,11 @@ class Mood_Journal:
 
         # In the meantime: use the del statement to delete the entry of the given entry_id from
         # self.entries_dict // example of formatting: del my_dict[id]
+
+        if entry_id in self.entries_dict:
+            del self.entries_dict[entry_id]
+            return True
+        else:
+            return False
+
         pass
