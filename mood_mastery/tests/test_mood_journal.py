@@ -16,3 +16,9 @@ def create_entry_test():
 
 
 create_entry_test()
+
+"""Determine Ranking Emoji Test"""
+def determine_ranking_emoji_test():
+    e1 = Entry("Test Entry", 1, 1, 1, "Awesome", 1)
+    assert e1.determine_ranking_emoji() == (b'\\0001f60e').decode('unicode_escape')
+    print("Determine Ranking Emoji Test Passed")
