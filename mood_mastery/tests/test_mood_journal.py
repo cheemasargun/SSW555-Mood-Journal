@@ -33,6 +33,45 @@ def determine_ranking_emoji_test():
     assert e1.determine_ranking_emoji() == (b'\\0001f60e').decode('unicode_escape')
     print("Determine Ranking Emoji Test Passed")
 
+""""Test Tagging System"""
+def test_add_tag_basic_and_blank():
+    e = Entry("A", 1, 1, 2025, "X", 1)
+    assert e.add_tag("Focus") is True
+    assert e.tags == ["focus"]
+
+    # Duplicate (case-insensitive)
+    assert e.add_tag("focus") is False
+    assert e.tags == ["focus"]
+
+    # Blank / whitespace-only should be rejected
+    assert e.add_tag("   ") is False
+    assert e.tags == ["focus"]
+
+def test_add_tags_bulk_counting():
+    e = Entry("A", 1, 1, 2025, "X", 1)
+    added = e.add_tags(["Friends", " Sleep ", "friends", "FOCUS"])
+    assert added == 3  # friends, sleep, focus (one duplicate ignored)
+    assert sorted(e.tags) == ["focus", "friends", "sleep"]
+
+def test_has_tag_case_insensitive():
+    e = Entry("A", 1, 1, 2025, "X", 1, tags=["Exercise"])
+    assert e.has_tag("exercise") is True
+    assert e.has_tag("ExErCiSe") is True
+    assert e.has_tag("rest") is False
+
+def test_remove_tag_and_clear():
+    e = Entry("A", 1, 1, 2025, "X", 1, tags=["focus", "friends", "sleep"])
+    assert e.remove_tag("Friends") is True
+    assert sorted(e.tags) == ["focus", "sleep"]
+
+    # Removing non-existent returns False
+    assert e.remove_tag("gratitude") is False
+
+    e.clear_tags()
+    assert e.tags == []
+
+
+
 def mj_create_entry_test():
     mj1 = Mood_Journal()
     entry1_id = mj1.mj_create_entry("Test Entry 2", 1, 1, 2026, "Happy New Year!", 9)

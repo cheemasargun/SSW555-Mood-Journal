@@ -46,14 +46,14 @@ class Mood_Journal:
         
         self.entries_dict = {}
 
-    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int):
-        new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking)
+    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, tags:None):
+        new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, tags)
         new_entry_id = new_entry.entry_id_str
         self.entries_dict[new_entry_id] = new_entry
         return new_entry_id
 
-    def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int):
-        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking)
+    def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, tags:None):
+        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, tags)
 
     def mj_delete_entry(entry_id: int):
         # I imagine this would search for an entry's unique id and remove it from the database.

@@ -25,7 +25,7 @@ class Entry:
     entry_body = ""
     ranking = -999 # CMNT: this default value is for if we want to keep a numerical representation for rankings in the code
 
-    def __init__(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int):
+    def __init__(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, tags=None):
         """
         Initializes the Entry instance with values for each attribute of the class.
 
@@ -42,6 +42,10 @@ class Entry:
         self.entry_date = date(entry_year,entry_month,entry_day)
         self.entry_body = entry_body
         self.ranking = ranking
+        self.tags: list[str] =[]
+        if tags:
+            for t in tags:
+                self.add_tag(t)
 
     def edit_entry(self, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int):
         """
@@ -86,5 +90,44 @@ class Entry:
                 toReturn = b'\\0001fae9'
         return toReturn.decode('unicode_escape')
 
+    #Tagging System
+    def _clean(self, tag):
+        #Trim spaces and lowercase
+        return tag.strip().lower()
     
+    def has_tag(self,tag):
+        t = self.clean_(tag)
+        return t in self.tags
+    
+    def add_tag(self,tag):
+        #Add one tag, return true if added, false if blank or already added
+        t = self._clean(tag)
+        if t == "":
+            return False
+        if t in self.tags:
+            return False
+        self.tags.append(t)
+        return True 
+    
+    def add_tags(self, tags):
+        #Add multiple tags
+        added = 0
+        for tag in tags:
+            if self.add_tage(tag):
+                added += 1
+        return added
+    
+    def remove_tag(self,tag):
+        #Remove tags, Returns true if removed
+        t = self._clean(tag)
+        if t in self.tags:
+            self.tags.remove(t)
+            return True 
+        return False
+    
+    def clear_tags(self):
+        #remove all tags
+        self.tags =[]
+
+
         
