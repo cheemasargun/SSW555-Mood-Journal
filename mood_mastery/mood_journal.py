@@ -30,13 +30,14 @@ in entry.py and mood_journal.py
 from extensions import db
 from datetime import datetime, date, timedelta
 from mood_mastery.entry import Entry
+from typing import Optional
 
 class Mood_Journal:
     # Attributes (TO BE UPDATED) (if we need attributes here, really)
     entries_dict = {}
     streak_current = 0
     streak_longest = 0
-    last_entry_date : date | None = None
+    last_entry_date : Optional[date] = None
 
     def __init__(self):
         # TODO
