@@ -2,7 +2,9 @@
 import uuid
 from datetime import date
 from datetime import datetime
+from typing import Dict, Optional
 import emoji
+
 # ^ FOR RANKING EMOJI: make sure to run 'pip install emoji'
 # ref: https://www.geeksforgeeks.org/python/introduction-to-emoji-module-in-python/
 # CTRL+F "emojize" on ref page: emoji.emojize could be useful if we want to use emoji shortcodes (i.e. ":earth_americas:" for the globe emoji with the Americas)
@@ -11,7 +13,7 @@ BIOMETRICS: Dict[str, list[str]] = {
     "Sleep": ["well rested", "meh", "sleepy", "exhausted"]
     "Physical Wellness": ["sick", "been better", "normal", "energized"]
     "Mental Wellness": ["terrible", "been better", "normal", "energized"]
-    "Menstration": ["yes", "no"]
+    "Menstruation": ["yes", "no"]
 }
 class Entry:
     """
