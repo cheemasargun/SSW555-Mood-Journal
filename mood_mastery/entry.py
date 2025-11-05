@@ -2,10 +2,19 @@
 import uuid
 from datetime import date
 from datetime import datetime
+from typing import Dict, Optional
 import emoji
+
 # ^ FOR RANKING EMOJI: make sure to run 'pip install emoji'
 # ref: https://www.geeksforgeeks.org/python/introduction-to-emoji-module-in-python/
 # CTRL+F "emojize" on ref page: emoji.emojize could be useful if we want to use emoji shortcodes (i.e. ":earth_americas:" for the globe emoji with the Americas)
+
+BIOMETRICS: Dict[str, list[str]] = {
+    "Sleep": ["well rested", "meh", "sleepy", "exhausted"],
+    "Physical Wellness": ["sick", "been better", "normal", "energized"],
+    "Mental Wellness": ["terrible", "been better", "normal", "energized"],
+    "Menstruation": ["yes", "no"],
+}
 
 class Entry:
     """
@@ -27,7 +36,7 @@ class Entry:
     ranking = -999 # CMNT: this default value is for if we want to keep a numerical representation for rankings in the code
     is_private = None
 
-    def __init__(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, tags=None):
+    def __init__(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, tags=None, biometrics: Optional[Dict[str, str]] = None):
         """
         Initializes the Entry instance with values for each attribute of the class.
 
@@ -49,6 +58,9 @@ class Entry:
             for t in tags:
                 self.add_tag(t)
         self.is_private = False # By default, entry is not private
+        self.biometrics: Dict[str, str] = {}
+        if biometrics:
+            self.initialize_biometrics(biometrics)
 
     def edit_entry(self, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int):
         """
@@ -67,6 +79,35 @@ class Entry:
         self.entry_body = new_body
         self.ranking = new_ranking
 
+    def initialize_biometrics(self, data: Dict[str, str]) -> None:
+        """
+        bulk set biometrics
+        """
+        for key, value in data.items():
+            if key in BIOMETRICS and value in BIOMETRICS[key]:
+                self.biometrics[key] = value
+
+    def set_biometric(self, key: str, value: str) -> bool:
+        """
+        sets one biometric, returns True if accepted
+        """
+        if key in BIOMETRICS and value in BIOMETRICS[key]:
+            self.biometrics[key] = value
+            return True
+        return False
+
+    def get_biometrics(self) -> Dict[str, str]:
+        """
+        Returns the raw storage values (e.g., {'sleep': 'well rested'})
+        """
+        return dict(self.biometrics)
+
+    def delete_biometric(self, key: str) -> bool:
+        """
+        removes one biometric field, returns True if removed
+        """
+        return bool(self.biometrics.pop(key, None))
+        
     def determine_ranking_emoji(self):
         """
         Checks the Entry instance's ranking attribute and determines its associated emoji
