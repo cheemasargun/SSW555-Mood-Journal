@@ -46,16 +46,16 @@ class Mood_Journal:
         
         self.entries_dict = {}
 
-    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, tags:None):
+    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, tags=None):
         new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, tags)
         new_entry_id = new_entry.entry_id_str
         self.entries_dict[new_entry_id] = new_entry
         return new_entry_id
 
-    def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, tags:None):
-        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, tags)
+    def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int):
+        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking)
 
-    def mj_delete_entry(entry_id: int):
+    def mj_delete_entry(self, entry_id_str: str):
         # I imagine this would search for an entry's unique id and remove it from the database.
 
         # We can probably have this implemented using a dictionary if the database might take
@@ -66,10 +66,35 @@ class Mood_Journal:
         # In the meantime: use the del statement to delete the entry of the given entry_id from
         # self.entries_dict // example of formatting: del my_dict[id]
 
-        if entry_id in self.entries_dict:
-            del self.entries_dict[entry_id]
+        if entry_id_str in self.entries_dict:
+            del self.entries_dict[entry_id_str]
             return True
         else:
             return False
 
-        pass
+    def mj_get_entry(self, entry_id_str: str):
+        """
+        Returns the Entry object of id entry_id_str if such an entry exists.
+        Otherwise, returns False.
+
+        Parameters -------------------------
+        - entry_id_str : str        // The id of the Entry object the user wishes to search for
+        """
+        if entry_id_str in self.entries_dict:
+            return self.entries_dict[entry_id_str]
+        else:
+            return False # No such entry exists
+        
+    def mj_get_entry_privacy_status(self, entry_id_str: str):
+        """
+        Returns the privacy status of an Entry of entry_id_str if such an entry exists.
+        Otherwise, returns None.
+
+        Parameters -------------------------
+        - entry_id_str : str        // The id of the Entry object the user wishes to search for
+        """
+        if(self.mj_get_entry(entry_id_str) ==  False):
+            return None # No such entry exists
+        else:
+            # Returns true if entry is private; False if not
+            return self.mj_get_entry(entry_id_str).is_private_check()
