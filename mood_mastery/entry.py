@@ -10,10 +10,10 @@ import emoji
 # CTRL+F "emojize" on ref page: emoji.emojize could be useful if we want to use emoji shortcodes (i.e. ":earth_americas:" for the globe emoji with the Americas)
 
 BIOMETRICS: Dict[str, list[str]] = {
-    "Sleep": ["well rested", "meh", "sleepy", "exhausted"]
-    "Physical Wellness": ["sick", "been better", "normal", "energized"]
-    "Mental Wellness": ["terrible", "been better", "normal", "energized"]
-    "Menstration": ["yes", "no"]
+    "Sleep": ["well rested", "meh", "sleepy", "exhausted"],
+    "Physical Wellness": ["sick", "been better", "normal", "energized"],
+    "Mental Wellness": ["terrible", "been better", "normal", "energized"],
+    "Menstruation": ["yes", "no"],
 }
 
 class Entry:
@@ -60,7 +60,7 @@ class Entry:
         self.is_private = False # By default, entry is not private
         self.biometrics: Dict[str, str] = {}
         if biometrics:
-            self.set_biometrics(biometrics)
+            self.initialize_biometrics(biometrics)
 
     def edit_entry(self, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int):
         """
