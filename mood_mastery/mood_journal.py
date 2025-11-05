@@ -67,3 +67,30 @@ class Mood_Journal:
         # In the meantime: use the del statement to delete the entry of the given entry_id from
         # self.entries_dict // example of formatting: del my_dict[id]
         pass
+
+    def mj_report(self, curr_day, curr_month, curr_year, weekly):
+        curr_date = datetime.date(curr_year, curr_month, curr_day)
+        monthly_dates = []
+
+        if weekly:
+            for i in range(7):
+                monthly_dates.append(curr_date - datetime.timedelta(days = i))
+        else:
+            for i in range(30):
+                monthly_dates.append(curr_date - datetime.timedelta(days = i))
+        
+        entries_to_report = []
+
+        for i in self.entries_dict.keys():
+            for d in weekly_dates:
+                if self.entries_dict[i].entry_date == d:
+                    entries_to_report.append(i)
+        
+        emoji_count =  [0, 0, 0, 0, 0, 0, 0, 0]
+
+        if len(entries_to_report) == 0:
+            return None
+        else:
+            for i in entries_to_report:
+                emoji_count[self.entries_dict[i].ranking - 1] += 1
+            return emoji_count
