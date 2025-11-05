@@ -16,6 +16,7 @@ class Entry:
      - entry_date : date    // The date of a user's entry
      - entry_body : str     // The body/main text of a user's entry
      - ranking : int        // The ranking assigned to the entry by a user (TODO: describe valid range if we're doing it numerically in the code + then representing certain value ranges with different emojis)
+     - is_private : bool    // The privacy status of the entry (True = private; False = public)
     """
 
     # Attributes (TODO: update if we have more features to add to entries)
@@ -24,6 +25,7 @@ class Entry:
     entry_date = None
     entry_body = ""
     ranking = -999 # CMNT: this default value is for if we want to keep a numerical representation for rankings in the code
+    is_private = None
 
     def __init__(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, tags=None):
         """
@@ -46,6 +48,7 @@ class Entry:
         if tags:
             for t in tags:
                 self.add_tag(t)
+        self.is_private = False # By default, entry is not private
 
     def edit_entry(self, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int):
         """
@@ -96,7 +99,7 @@ class Entry:
         return tag.strip().lower()
     
     def has_tag(self,tag):
-        t = self.clean_(tag)
+        t = self._clean(tag)
         return t in self.tags
     
     def add_tag(self,tag):
@@ -113,7 +116,7 @@ class Entry:
         #Add multiple tags
         added = 0
         for tag in tags:
-            if self.add_tage(tag):
+            if self.add_tag(tag):
                 added += 1
         return added
     
@@ -129,5 +132,8 @@ class Entry:
         #remove all tags
         self.tags =[]
 
-
-        
+    def is_private_check(self):
+        return self.is_private
+    
+    def set_privacy_setting(self, priv_setting: bool):
+        self.is_private = priv_setting

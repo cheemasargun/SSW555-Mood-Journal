@@ -4,10 +4,11 @@
 # Look to docs/TESTING.md and tests/test_models.py for reference
 from mood_mastery.entry import Entry
 from mood_mastery.mood_journal import Mood_Journal
+from mood_mastery.user import User
 import pytest
 
 """Create Entry Test"""
-def create_entry_test():
+def test_create_entry():
     e1 = Entry("Test Entry", 13,1,2025, "Today is my birthday!", 9)
     assert e1.entry_name == "Test Entry", "Entry name should match the provided input"
     assert e1.entry_date == (13, 1, 2025) or hasattr(e1, "entry_date"), "Entry should store a valid date"
@@ -15,9 +16,10 @@ def create_entry_test():
     assert e1.ranking == 9, "Ranking should match the provided number"
     print("Entry of id " + e1.entry_id_str + " successfully created.")
     print("Create Entry Test Passed")
+    print()
 
 """Edit Entry Test"""
-def edit_entry_test():
+def test_edit_entry():
     e1 = Entry("Test Entry 2", 1, 1, 2026, "Happy New Year!", 9)
     e1.edit_entry("New Year's Party", 1, 1, 2026, "Happy New Year! The party was so fun!!", 10)
     assert e1.entry_name == "New Year's Party", "New entry name should match the provided input"
@@ -26,12 +28,14 @@ def edit_entry_test():
     assert e1.ranking == 10, "New ranking should match the provided number"
     print("Entry of id " + e1.entry_id_str + " successfully edited.")
     print("Edit Entry Test Passed")
+    print()
 
 """Determine Ranking Emoji Test"""
-def determine_ranking_emoji_test():
+def test_determine_ranking_emoji():
     e1 = Entry("Test Entry", 1, 1, 1, "Awesome", 1)
     assert e1.determine_ranking_emoji() == (b'\\0001f60e').decode('unicode_escape')
     print("Determine Ranking Emoji Test Passed")
+    print()
 
 """"Test Tagging System"""
 def test_add_tag_basic_and_blank():
@@ -70,17 +74,104 @@ def test_remove_tag_and_clear():
     e.clear_tags()
     assert e.tags == []
 
+def test_is_private_check():
+    e1 = Entry("Test Entry 2", 1, 1, 2026, "Happy New Year!", 9)
+    # Testing if e1 is public (is_private is False) by default
+    assert e1.is_private_check() == False
+    print("Entry of id " + e1.entry_id_str + " is public (is_private is False) by default.")
+    print("Entry is_private_check() Default Test Passed.")
+    print()
 
+def test_set_privacy_setting():
+    e1 = Entry("Test Entry", 13,1,2025, "Today is my birthday!", 9)
+    # Testing if set_privacy_setting() works directly
+    e1.set_privacy_setting(True)
+    assert e1.is_private_check() == True
+    print("Entry of id " + e1.entry_id_str + " successfully made private (is_private is True.")
+    print("Entry set_privacy_setting() Test Passed.")
+    print()
 
-def mj_create_entry_test():
+def test_mj_get_entry():
+    mj1 = Mood_Journal()
+    entry1_id = mj1.mj_create_entry("New Year's Party", 1, 1, 2026, "Happy New Year! The party was so fun!!", 10)
+    mj1_received_entry = mj1.mj_get_entry(entry1_id)
+    assert mj1_received_entry.entry_name == "New Year's Party", "entry name should match the provided input"
+    assert mj1_received_entry.entry_date == (1,1,2026) or hasattr(mj1_received_entry, "entry_date"), "entry date should match and be a valid date"
+    assert mj1_received_entry.entry_body == "Happy New Year! The party was so fun!!", "entry body should match the input text"
+    assert mj1_received_entry.ranking == 10, "ranking should match the provided number"
+    print("Mood Journal Get Entry Test Passed")
+    print()
+
+def test_mj_get_entry_privacy_status_DEFAULT():
+    mj1 = Mood_Journal()
+    entry1_id = mj1.mj_create_entry("New Year's Party", 1, 1, 2026, "Happy New Year! The party was so fun!!", 10)
+    entry2_id = mj1.mj_create_entry("Test Entry", 13,1,2025, "Today is my birthday!", 9)
+    assert mj1.mj_get_entry_privacy_status(entry1_id) == False
+    assert mj1.mj_get_entry_privacy_status(entry2_id) == False
+    print("Mood Journal Get Entry Privacy Status Test (DEFAULT) Passed")
+    print()
+
+def test_user_pwd_initialization():
+    user1 = User()
+    assert user1.user_entries_pwd_encrypted == None
+    print("User Pwd Initialization Test (DEFAULT) Passed (User pwd is None by default)")
+    print()
+
+def test_user_view_entry_PUBLIC():
+    user1 = User()
+    entry1_id = user1.user_mood_journal.mj_create_entry("New Year's Party", 1, 1, 2026, "Happy New Year! The party was so fun!!", 10)
+    entry1 = user1.view_entry(entry1_id)
+    assert entry1.entry_name == "New Year's Party", "entry name should match the provided input"
+    assert entry1.entry_date == (1,1,2026) or hasattr(entry1, "entry_date"), "entry date should match and be a valid date"
+    assert entry1.entry_body == "Happy New Year! The party was so fun!!", "entry body should match the input text"
+    assert entry1.ranking == 10, "ranking should match the provided number"
+    assert entry1.is_private == False, "privacy status should match the default (False)"
+    print("User View Entry Test (PUBLIC) Passed")
+    print()
+
+def test_user_check_if_private_PUBLIC():
+    user1 = User()
+    entry1_id = user1.user_mood_journal.mj_create_entry("New Year's Party", 1, 1, 2026, "Happy New Year! The party was so fun!!", 10)
+    assert user1.check_if_private(entry1_id) == False, "privacy status should match the default (False)"
+    print("User Check If Private Test (PUBLIC) Passed")
+    print()
+
+def test_user_privatize_entry_NOPWD_NOINPUT():
+    user1 = User()
+    entry1_id = user1.user_mood_journal.mj_create_entry("New Year's Party", 1, 1, 2026, "Happy New Year! The party was so fun!!", 10)
+    assert user1.privatize_entry(entry1_id) == False, "privatize_entry should return False if no pwd exists and none was given as input"
+    print("User Privatize Entry (NO PWD, NO INPUT) Test Passed")
+    print()
+
+def test_user_privatize_entry_PWD_INPUT():
+    user1 = User()
+    entry1_id = user1.user_mood_journal.mj_create_entry("New Year's Party", 1, 1, 2026, "Happy New Year! The party was so fun!!", 10)
+    user1.privatize_entry(entry1_id, "hello123")
+    assert user1.check_if_private(entry1_id) == True # Entry is private (True)
+    assert user1.view_entry(entry1_id) == False # Entry is private, but no pwd attempt given
+    assert user1.view_entry(entry1_id, "oops987") == False # Entry is private, but pwd attempt is incorrect
+    
+    # Checking that pivate entry is accesible (and its traits are as expected)
+    # if proper pwd is input
+    entry1 = user1.view_entry(entry1_id, "hello123")
+    assert entry1.entry_name == "New Year's Party", "entry name should match the provided input"
+    assert entry1.entry_date == (1,1,2026) or hasattr(entry1, "entry_date"), "entry date should match and be a valid date"
+    assert entry1.entry_body == "Happy New Year! The party was so fun!!", "entry body should match the input text"
+    assert entry1.ranking == 10, "ranking should match the provided number"
+    assert entry1.is_private == True, "privacy status should be True"
+    print("User Privatize Entry (PWD, INPUT) Test Passed")
+    print()
+
+def test_mj_create_entry():
     mj1 = Mood_Journal()
     entry1_id = mj1.mj_create_entry("Test Entry 2", 1, 1, 2026, "Happy New Year!", 9)
     assert len(mj1.entries_dict) == 1
     print(mj1.entries_dict)
     print("Mood Journal entry of id " + entry1_id + " successfully created and added.")
     print("Mood Journal Create Entry Test Passed")
+    print()
 
-def mj_edit_entry_test():
+def test_mj_edit_entry():
     mj1 = Mood_Journal()
     entry1_id = mj1.mj_create_entry("Test Entry 2", 1, 1, 2026, "Happy New Year!", 9)
     mj1.mj_edit_entry(entry1_id, "New Year's Party", 1, 1, 2026, "Happy New Year! The party was so fun!!", 10)
@@ -91,10 +182,11 @@ def mj_edit_entry_test():
     assert mj1.entries_dict[entry1_id].ranking == 10, "New ranking should match the provided number"
     print("Entry of id " + entry1_id + " successfully edited.")
     print("Mood Journal Edit Entry Test Passed")
+    print()
 
 
 """Mood Journal Delete Entry Test"""
-def mj_delete_entry_test():
+def test_mj_delete_entry():
     # TODO: create a Mood_Journal object, make two entries using the mj_create_entry function,
     #       call the mj_delete_entry function with one of their ids, and assert that the length of your
     #       Mood_Journal object is now one.
@@ -123,11 +215,16 @@ def mj_delete_entry_test():
     assert deleted_missing is False, "Deleting a missing ID should return False"
 
     print("Mood Journal Delete Entry Test Passed")
-    pass
+    print()
 
-create_entry_test()
-edit_entry_test()
-determine_ranking_emoji_test()
-mj_create_entry_test()
-mj_edit_entry_test()
-mj_delete_entry_test()
+
+
+test_create_entry()
+test_edit_entry()
+test_determine_ranking_emoji()
+test_mj_create_entry()
+test_mj_edit_entry()
+test_mj_delete_entry()
+
+test_is_private_check()
+test_set_privacy_setting()
