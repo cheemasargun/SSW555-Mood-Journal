@@ -5,6 +5,7 @@
 from mood_mastery.entry import Entry
 from mood_mastery.mood_journal import Mood_Journal
 from mood_mastery.user import User
+from datetime import date
 import pytest
 
 """Create Entry Test"""
@@ -73,7 +74,7 @@ def test_remove_tag_and_clear():
 
     e.clear_tags()
     assert e.tags == []
-
+"""Test Privatize Entries"""
 def test_is_private_check():
     e1 = Entry("Test Entry 2", 1, 1, 2026, "Happy New Year!", 9)
     # Testing if e1 is public (is_private is False) by default
@@ -217,14 +218,96 @@ def test_mj_delete_entry():
     print("Mood Journal Delete Entry Test Passed")
     print()
 
+"""Testing Streak System"""
+def test_streak_initial_state_new_journal():
+    mj = Mood_Journal()
+    s = mj.get_streak_summary()
+    assert s["current_streak"] == 0
+    assert s["longest_streak"] == 0
+    assert s["last_entry_date"] is None
 
+def test_streak_first_entry_starts_at_one():
+    mj = Mood_Journal()
+    mj.mj_log_entry("D1", 1, 1, 2026, "First", 5)
+    s = mj.get_streak_summary()
+    assert s["current_streak"] == 1
+    assert s["longest_streak"] == 1
+    assert s["last_entry_date"] == date(2026, 1, 1)
 
-test_create_entry()
-test_edit_entry()
-test_determine_ranking_emoji()
-test_mj_create_entry()
-test_mj_edit_entry()
-test_mj_delete_entry()
+def test_streak_consecutive_days_increment():
+    mj = Mood_Journal()
+    mj.mj_log_entry("D1", 1, 1, 2026, "Day1", 5)
+    mj.mj_log_entry("D2", 2, 1, 2026, "Day2", 5)
+    mj.mj_log_entry("D3", 3, 1, 2026, "Day3", 5)
+    s = mj.get_streak_summary()
+    assert s["current_streak"] == 3
+    assert s["longest_streak"] == 3
+    assert s["last_entry_date"] == date(2026, 1, 3)
 
-test_is_private_check()
-test_set_privacy_setting()
+def test_streak_multiple_entries_same_day_no_increment():
+    mj = Mood_Journal()
+    mj.mj_log_entry("D1-a", 10, 2, 2026, "A", 5)
+    # same calendar day, should not increase streak
+    mj.mj_log_entry("D1-b", 10, 2, 2026, "B", 5)
+    s = mj.get_streak_summary()
+    assert s["current_streak"] == 1
+    assert s["longest_streak"] == 1
+    assert s["last_entry_date"] == date(2026, 2, 10)
+
+def test_streak_gap_breaks_and_resets_current():
+    mj = Mood_Journal()
+    mj.mj_log_entry("D1", 1, 3, 2026, "Day1", 5)
+    mj.mj_log_entry("D2", 2, 3, 2026, "Day2", 5)
+    # gap: skip the 3rd, log on the 4th
+    mj.mj_log_entry("D4", 4, 3, 2026, "Day4", 5)
+    s = mj.get_streak_summary()
+    assert s["current_streak"] == 1        # reset on the gap
+    assert s["longest_streak"] == 2        # best run was D1-D2
+    assert s["last_entry_date"] == date(2026, 3, 4)
+
+def test_streak_backfill_triggers_recompute_and_extends_run():
+    mj = Mood_Journal()
+    # Create 1st, 2nd, and 4th — current=1, longest=2 (from 1-2), last=4th
+    mj.mj_log_entry("D1", 1, 4, 2026, "Day1", 5)
+    mj.mj_log_entry("D2", 2, 4, 2026, "Day2", 5)
+    mj.mj_log_entry("D4", 4, 4, 2026, "Day4", 5)
+    s = mj.get_streak_summary()
+    assert s["current_streak"] == 1
+    assert s["longest_streak"] == 2
+    assert s["last_entry_date"] == date(2026, 4, 4)
+
+    # Backfill the 3rd — recompute should yield a 4-day streak ending on the 4th
+    mj.mj_log_entry("D3-backfill", 3, 4, 2026, "Day3", 5)
+    s2 = mj.get_streak_summary()
+    assert s2["current_streak"] == 4
+    assert s2["longest_streak"] == 4
+    assert s2["last_entry_date"] == date(2026, 4, 4)
+
+def test_streak_delete_entry_recompute():
+    mj = Mood_Journal()
+    i1 = mj.mj_create_entry("D1", 1, 6, 2026, "Day1", 5)
+    i2 = mj.mj_create_entry("D2", 2, 6, 2026, "Day2", 5)
+    i3 = mj.mj_create_entry("D3", 3, 6, 2026, "Day3", 5)
+    mj.recompute_streak()
+    s0 = mj.get_streak_summary()
+    assert s0["current_streak"] == 3
+    assert s0["longest_streak"] == 3
+    assert s0["last_entry_date"] == date(2026, 6, 3)
+
+    # Delete the middle day; should break the chain (now only 1 and 3)
+    assert mj.mj_delete_entry(i2) is True
+    s1 = mj.get_streak_summary()
+    assert s1["current_streak"] == 1
+    assert s1["longest_streak"] == 1
+    assert s1["last_entry_date"] == date(2026, 6, 3)
+
+def test_get_streak_summary_shape_and_types():
+    mj = Mood_Journal()
+    mj.mj_log_entry("Hello", 15, 7, 2026, "Entry", 4)
+    s = mj.get_streak_summary()
+    assert set(s.keys()) == {"current_streak", "longest_streak", "last_entry_date"}
+    assert isinstance(s["current_streak"], int)
+    assert isinstance(s["longest_streak"], int)
+    # last_entry_date is None or a datetime.date
+    led = s["last_entry_date"]
+    assert (led is None) or isinstance(led, date)
