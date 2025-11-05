@@ -29,6 +29,7 @@ in entry.py and mood_journal.py
 
 from extensions import db
 from datetime import datetime
+import datetime
 from mood_mastery.entry import Entry
 
 class Mood_Journal:
