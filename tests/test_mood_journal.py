@@ -318,3 +318,10 @@ def mj_weekly_report_test():
     mj.mj_create_entry("e1", 1, 1, 1, "body", 3)
     assert mj.mj_report(1, 1, 1, True) == [0, 0, 1, 0, 0, 0, 0, 0]
     print("Report Test Passed")
+
+def mj_monthly_report_test():
+    mj = Mood_Journal()
+    assert mj.mj_monthly_report(1, 1, 1, True) == None
+    mj.mj_create_entry("e1", 1, 1, 1, "body", 3)
+    assert mj.mj_report(1, 1, 1, True) == [0, 0, 1, 0, 0, 0, 0, 0]
+    print("Monthly Report Test Passed")
