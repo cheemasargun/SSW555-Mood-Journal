@@ -1,170 +1,398 @@
 {% extends "base.html" %}
 
-{% block title %}Mood Journal • Student Starter Pack{% endblock %}
+{% block title %}Mood Journal • Demo{% endblock %}
 
 {% block extra_head %}
 <style>
-    @keyframes float {
-        0% { transform: translateY(0px) rotate(0deg); }
-        50% { transform: translateY(-10px) rotate(5deg); }
-        100% { transform: translateY(0px) rotate(0deg); }
-    }
-    .float-animation {
-        animation: float 4s ease-in-out infinite;
-    }
+  @keyframes float { 0%{transform:translateY(0) rotate(0)} 50%{transform:translateY(-10px) rotate(5deg)} 100%{transform:translateY(0) rotate(0)} }
+  .float-animation { animation: float 4s ease-in-out infinite; }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- Title -->
 <div class="mb-8">
-    <div class="flex items-center gap-4 mb-4">
-        <div class="p-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl text-white float-animation">
-            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-        </div>
-        <div>
-            <h2 class="text-3xl font-bold text-gray-900">Mood Journal</h2>
-            <p class="text-gray-600">Your emotional landscape, beautifully tracked</p>
-        </div>
+  <div class="flex items-center gap-4">
+    <div class="p-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl text-white float-animation">
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
     </div>
-</div>
-
-<div class="bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 rounded-xl p-6 mb-8 border border-amber-200">
-    <div class="flex items-start gap-3">
-        <span class="text-2xl">🌈</span>
-        <div>
-            <h3 class="font-semibold text-gray-900 mb-1">Dreamy Reflections</h3>
-            <p class="text-gray-600 text-sm">A soft, calming space for emotional awareness and self-reflection. Track your moods with a gentle, supportive interface that celebrates all feelings.</p>
-        </div>
-    </div>
+    <h2 class="text-3xl font-bold text-gray-900">Mood Journal</h2>
+  </div>
 </div>
 
 <div class="grid lg:grid-cols-2 gap-8">
+  <!-- Left: Streak + Add -->
+  <div class="space-y-6">
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div class="flex items-center gap-2 mb-6">
-            <span class="text-xl">✨</span>
-            <h3 class="text-lg font-semibold text-gray-900">How's Your Inner Weather?</h3>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🔥</span>
+          <h3 class="text-lg font-semibold text-gray-900">Streak</h3>
         </div>
-        <form method="POST" action="/mood-journal" class="space-y-6">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-4">Current Mood</label>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <input type="radio" id="mood-excellent" name="mood" value="excellent" required class="hidden peer/excellent">
-                    <label for="mood-excellent"
-                        class="cursor-pointer p-4 rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all duration-200 flex flex-col items-center gap-2 peer-checked/excellent:bg-gradient-to-br peer-checked/excellent:from-yellow-400 peer-checked/excellent:to-orange-500 peer-checked/excellent:text-white peer-checked/excellent:border-transparent peer-checked/excellent:scale-105">
-                        <span class="text-2xl">🌟</span>
-                        <span class="text-sm font-medium">Excellent</span>
-                    </label>
+        <button onclick="openModal('addModal')" class="rounded-lg px-3 py-2 bg-indigo-600 text-white hover:bg-indigo-500">
+          + Add Entry
+        </button>
+      </div>
+      {% set s = summary %}
+      <dl class="grid grid-cols-3 gap-4 text-center mt-4">
+        <div class="bg-slate-50 rounded-xl p-4">
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Current</dt>
+          <dd class="text-2xl font-bold mt-1">{{ s.current }}</dd>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4">
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Longest</dt>
+          <dd class="text-2xl font-bold mt-1">{{ s.longest }}</dd>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4">
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Last Entry</dt>
+          <dd class="text-sm font-medium mt-1">{{ s.last or "—" }}</dd>
+        </div>
+      </dl>
+    </div>
+  </div>
 
-                    <input type="radio" id="mood-good" name="mood" value="good" class="hidden peer/good">
-                    <label for="mood-good"
-                        class="cursor-pointer p-4 rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 flex flex-col items-center gap-2 peer-checked/good:bg-gradient-to-br peer-checked/good:from-blue-400 peer-checked/good:to-cyan-500 peer-checked/good:text-white peer-checked/good:border-transparent peer-checked/good:scale-105">
-                        <span class="text-2xl">😊</span>
-                        <span class="text-sm font-medium">Good</span>
-                    </label>
-
-                    <input type="radio" id="mood-neutral" name="mood" value="neutral" class="hidden peer/neutral">
-                    <label for="mood-neutral"
-                        class="cursor-pointer p-4 rounded-xl border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 flex flex-col items-center gap-2 peer-checked/neutral:bg-gradient-to-br peer-checked/neutral:from-gray-400 peer-checked/neutral:to-gray-600 peer-checked/neutral:text-white peer-checked/neutral:border-transparent peer-checked/neutral:scale-105">
-                        <span class="text-2xl">😐</span>
-                        <span class="text-sm font-medium">Neutral</span>
-                    </label>
-
-                    <input type="radio" id="mood-bad" name="mood" value="bad" class="hidden peer/bad">
-                    <label for="mood-bad"
-                        class="cursor-pointer p-4 rounded-xl border-2 border-gray-200 hover:border-orange-400 hover:bg-orange-50 transition-all duration-200 flex flex-col items-center gap-2 peer-checked/bad:bg-gradient-to-br peer-checked/bad:from-orange-400 peer-checked/bad:to-red-500 peer-checked/bad:text-white peer-checked/bad:border-transparent peer-checked/bad:scale-105">
-                        <span class="text-2xl">😔</span>
-                        <span class="text-sm font-medium">Bad</span>
-                    </label>
-
-                    <input type="radio" id="mood-terrible" name="mood" value="terrible" class="hidden peer/terrible">
-                    <label for="mood-terrible"
-                        class="cursor-pointer p-4 rounded-xl border-2 border-gray-200 hover:border-red-400 hover:bg-red-50 transition-all duration-200 flex flex-col items-center gap-2 peer-checked/terrible:bg-gradient-to-br peer-checked/terrible:from-red-500 peer-checked/terrible:to-pink-600 peer-checked/terrible:text-white peer-checked/terrible:border-transparent peer-checked/terrible:scale-105">
-                        <span class="text-2xl">😢</span>
-                        <span class="text-sm font-medium">Terrible</span>
-                    </label>
-                </div>
-            </div>
-
-            <div>
-                <label for="notes" class="block text-sm font-medium text-gray-700 mb-2">Thoughts & Reflections</label>
-                <textarea id="notes" name="notes" rows="4"
-                    class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200"
-                    placeholder="What's coloring your mood today? What are you grateful for?"></textarea>
-            </div>
-
-            <button type="submit"
-                class="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transform hover:scale-[1.02] transition-all duration-200 shadow-lg">
-                <span class="flex items-center justify-center gap-2">
-                    💜 Save This Moment
-                </span>
-            </button>
-        </form>
+  <!-- Right: Entries -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🌙</span>
+        <h3 class="text-lg font-semibold text-gray-900">Your Entries</h3>
+      </div>
+      {% if entries %}
+        <span class="text-sm text-gray-500">{{ entries|length }} entr{{ 'ies' if entries|length != 1 else 'y' }}</span>
+      {% endif %}
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-2">
-                <span class="text-xl">🌙</span>
-                <h3 class="text-lg font-semibold text-gray-900">Your Journey</h3>
+    {% if entries %}
+      <div class="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+        {% for e in entries %}
+        <div class="group relative p-4 rounded-xl border bg-white hover:shadow-md transition-all duration-200">
+          <div class="flex items-start justify-between mb-2">
+            <div class="flex items-start gap-3">
+              <div class="text-2xl leading-none" title="Ranking">
+                {{ ranking_emoji(e.ranking) }}
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-gray-900">{{ e.entry_name }}</span>
+                  {% if e.is_private_check() %}
+                    <span class="inline-flex items-center rounded-full bg-rose-100 text-rose-700 text-[11px] font-semibold px-2 py-0.5">🔒 Private</span>
+                  {% else %}
+                    <span class="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold px-2 py-0.5">🌐 Public</span>
+                  {% endif %}
+                </div>
+                <p class="text-xs text-gray-500">{{ e.entry_date.isoformat() }}</p>
+                {% if e.tags %}
+                  <div class="mt-2 flex flex-wrap gap-2">
+                    {% for t in e.tags %}
+                      <span class="text-xs bg-slate-100 text-slate-700 rounded-full px-2 py-0.5">#{{ t }}</span>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
             </div>
-            {% if entries %}
-            <span class="text-sm text-gray-500">{{ entries|length }} entr{{ 'ies' if entries|length != 1 else 'y' }}</span>
+            <div class="text-xs text-gray-400">{{ ranking_emoji(e.ranking) }} {{ e.ranking }}</div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <a href="{{ url_for('view_entry', entry_id=e.entry_id_str) }}"
+               class="rounded-lg px-3 py-1.5 text-sm bg-slate-900 text-white hover:bg-slate-700">View</a>
+
+            <a href="{{ url_for('edit_entry_open', entry_id=e.entry_id_str) }}"
+               class="rounded-lg px-3 py-1.5 text-sm bg-indigo-600 text-white hover:bg-indigo-500">Edit</a>
+
+            <form method="post" action="{{ url_for('delete_entry', entry_id=e.entry_id_str) }}"
+                  onsubmit="return confirm('Delete this entry?');">
+              <button class="rounded-lg px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200">Delete</button>
+            </form>
+
+            {% if not e.is_private_check() %}
+              <form method="post" action="{{ url_for('make_private', entry_id=e.entry_id_str) }}" class="ml-auto">
+                {% if not password_set %}
+                  <button class="text-indigo-700 hover:underline text-sm">Make Private (set password)</button>
+                {% else %}
+                  <button class="text-indigo-700 hover:underline text-sm">Make Private</button>
+                {% endif %}
+              </form>
             {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="text-center py-12">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-full mb-4">
+          <span class="text-2xl">☁️</span>
+        </div>
+        <p class="text-gray-500">No entries yet. Click “Add Entry”.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Add Entry Modal -->
+<div id="addModal" class="hidden fixed inset-0 z-50">
+  <div class="absolute inset-0 bg-black/40" onclick="closeModal('addModal')"></div>
+  <div class="relative max-w-xl mx-auto mt-16 w-[92%]">
+    <div class="bg-white rounded-2xl shadow-xl max-h-[85vh] flex flex-col">
+      <!-- Header -->
+      <div class="px-6 pt-6 pb-4 flex items-start justify-between">
+        <h3 class="text-lg font-semibold">Add Entry</h3>
+        <button class="text-slate-400 hover:text-slate-600" onclick="closeModal('addModal')">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div class="px-6 pb-4 overflow-y-auto">
+        <form id="addForm" method="POST" action="{{ url_for('add_entry') }}" class="space-y-6">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <input name="title" class="w-full rounded-xl border px-3 py-2" required />
+          </div>
+
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="text-sm block mb-1">Year</label>
+              <input name="year" type="number" class="w-full rounded-xl border px-3 py-2" value="{{ today.year }}" required />
+            </div>
+            <div>
+              <label class="text-sm block mb-1">Month</label>
+              <input name="month" type="number" class="w-full rounded-xl border px-3 py-2" value="{{ today.month }}" required />
+            </div>
+            <div>
+              <label class="text-sm block mb-1">Day</label>
+              <input name="day" type="number" class="w-full rounded-xl border px-3 py-2" value="{{ today.day }}" required />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Ranking (1–8)</label>
+            <div class="grid grid-cols-4 gap-2">
+              {% for r in range(1,9) %}
+                <label class="cursor-pointer flex items-center justify-center gap-2 rounded-xl border px-3 py-2 hover:bg-slate-50">
+                  <input type="radio" name="ranking" value="{{ r }}" {% if r==5 %}checked{% endif %} class="mr-2">
+                  <span class="text-lg">{{ ranking_emoji(r) }}</span>
+                  <span class="text-sm text-slate-700">{{ r }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div>
+            <label class="text-sm block mb-1">Tags (comma-separated)</label>
+            <input name="tags" class="w-full rounded-xl border px-3 py-2" placeholder="work, gym, study" />
+          </div>
+
+          <div>
+            <label class="text-sm block mb-1">Body</label>
+            <textarea name="body" rows="6" class="w-full rounded-xl border px-3 py-2" placeholder="How was your day?"></textarea>
+          </div>
+        </form>
+      </div>
+
+      <!-- Sticky footer -->
+      <div class="px-6 py-4 border-t bg-white sticky bottom-0 rounded-b-2xl flex items-center justify-end gap-3">
+        <button type="button" onclick="closeModal('addModal')" class="rounded-xl px-4 py-2 bg-slate-100 hover:bg-slate-200">Cancel</button>
+        <button type="submit" form="addForm" class="rounded-xl px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500">Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- View Entry Modal (read-only + privacy) -->
+{% if view_e is defined %}
+<div id="viewModal" class="fixed inset-0 z-50 {% if not open_view_modal %}hidden{% endif %}">
+  <div class="absolute inset-0 bg-black/40" onclick="closeModal('viewModal')"></div>
+  <div class="relative max-w-2xl mx-auto mt-12 w-[92%]">
+    <div class="bg-white rounded-2xl shadow-xl max-h-[85vh] overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="px-6 pt-6 pb-3 flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold">{{ view_e.entry_name }}</h3>
+          <p class="text-sm text-slate-500">{{ view_e.entry_date.isoformat() }}</p>
+        </div>
+        <button class="text-slate-400 hover:text-slate-600" onclick="closeModal('viewModal')">✕</button>
+      </div>
+
+      <div class="px-6 pb-4">
+        <div class="text-slate-600 flex items-center gap-4">
+          <div>
+            <span class="text-sm">Ranking:</span>
+            <span class="font-semibold">{{ ranking_emoji(view_e.ranking) }} {{ view_e.ranking }}</span>
+          </div>
+          {% if view_e.is_private_check() %}
+            <span class="inline-flex items-center rounded-full bg-rose-100 text-rose-700 text-[11px] font-semibold px-2 py-0.5">🔒 Private</span>
+          {% else %}
+            <span class="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold px-2 py-0.5">🌐 Public</span>
+          {% endif %}
         </div>
 
-        {% if entries %}
-            <div class="space-y-3 max-h-96 overflow-y-auto">
-                {% for entry in entries %}
-                <div class="group relative p-4 rounded-xl border-l-4 bg-gradient-to-r from-white to-gray-50 hover:shadow-md transition-all duration-200
-                    {% if entry.mood == 'excellent' %}border-yellow-400 hover:from-yellow-50 hover:to-amber-50
-                    {% elif entry.mood == 'good' %}border-blue-400 hover:from-blue-50 hover:to-cyan-50
-                    {% elif entry.mood == 'neutral' %}border-gray-400 hover:from-gray-50 hover:to-slate-50
-                    {% elif entry.mood == 'bad' %}border-orange-400 hover:from-orange-50 hover:to-red-50
-                    {% else %}border-red-400 hover:from-red-50 hover:to-pink-50{% endif %}">
-
-                    <div class="flex items-start justify-between mb-2">
-                        <div class="flex items-center gap-3">
-                            <span class="text-2xl">
-                                {% if entry.mood == 'excellent' %}🌟
-                                {% elif entry.mood == 'good' %}😊
-                                {% elif entry.mood == 'neutral' %}😐
-                                {% elif entry.mood == 'bad' %}😔
-                                {% else %}😢{% endif %}
-                            </span>
-                            <div>
-                                <span class="font-medium text-gray-900">{{ entry.mood|title }}</span>
-                                <p class="text-xs text-gray-500">{{ entry.created_at.strftime('%A, %b %d') }}</p>
-                            </div>
-                        </div>
-                        <span class="text-xs text-gray-400">{{ entry.created_at.strftime('%I:%M %p') }}</span>
-                    </div>
-
-                    {% if entry.notes %}
-                        <p class="text-sm text-gray-600 ml-11 italic">{{ entry.notes }}</p>
-                    {% else %}
-                        <p class="text-sm text-gray-400 ml-11 italic">Silent reflection</p>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="text-center py-12">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full mb-4">
-                    <span class="text-2xl">☁️</span>
-                </div>
-                <p class="text-gray-500 mb-2">No entries yet</p>
-                <p class="text-sm text-gray-400">Begin your emotional journey. Each entry creates a beautiful tapestry of your inner world.</p>
-            </div>
+        {% if view_e.tags %}
+          <div class="mt-3 flex flex-wrap gap-2">
+            {% for t in view_e.tags %}
+              <span class="text-xs bg-slate-100 text-slate-700 rounded-full px-2 py-1">#{{ t }}</span>
+            {% endfor %}
+          </div>
         {% endif %}
-    </div>
-</div>
+      </div>
 
-<div class="mt-8 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl p-8 text-white">
-    <div class="max-w-3xl mx-auto text-center">
-        <h3 class="text-2xl font-bold mb-2">Mindfulness Tip</h3>
-        <p class="opacity-90">Taking just 5 minutes each day to check in with your emotions can improve self-awareness and emotional regulation by up to 40%.</p>
+      <!-- Body / Unlock -->
+      <div class="px-6 pb-6 overflow-y-auto">
+        {% if view_body is not none %}
+          <div class="prose max-w-none whitespace-pre-wrap">{{ view_body|safe }}</div>
+        {% else %}
+          {% if view_e.is_private_check() %}
+            {% if view_ask_password %}
+              <form method="post" action="{{ url_for('unlock_entry', entry_id=view_e.entry_id_str) }}" class="space-y-3 max-w-sm">
+                <p class="text-sm text-slate-600">This entry is private. Enter the password to view.</p>
+                <input name="password" type="password" class="w-full rounded-xl border px-3 py-2" placeholder="Password" required />
+                <button class="rounded-xl px-4 py-2 bg-slate-900 text-white hover:bg-slate-700">Unlock</button>
+              </form>
+            {% else %}
+              <div class="text-slate-500 text-sm">This entry is private.</div>
+            {% endif %}
+          {% else %}
+            <div class="text-slate-500">No body text.</div>
+          {% endif %}
+        {% endif %}
+      </div>
+
+      <!-- Footer actions -->
+      <div class="px-6 py-4 border-t bg-white flex items-center gap-3">
+        {% if not view_e.is_private_check() %}
+          <form method="post" action="{{ url_for('make_private', entry_id=view_e.entry_id_str) }}" class="flex items-center gap-2">
+            {% if not password_set %}
+              <input name="password" type="password" class="rounded-xl border px-3 py-2" placeholder="Create password" required />
+              <button class="rounded-xl px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500">Set & Make Private</button>
+            {% else %}
+              <button class="rounded-xl px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500">Make Private</button>
+            {% endif %}
+          </form>
+        {% endif %}
+        <a href="{{ url_for('edit_entry_open', entry_id=view_e.entry_id_str) }}" class="rounded-xl px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500">Edit</a>
+        <form method="post" action="{{ url_for('delete_entry', entry_id=view_e.entry_id_str) }}"
+              onsubmit="return confirm('Delete this entry?');" class="ml-auto">
+          <button class="rounded-xl px-4 py-2 bg-slate-100 hover:bg-slate-200">Delete</button>
+        </form>
+      </div>
     </div>
+  </div>
 </div>
+{% if open_view_modal %}
+<script>openModal('viewModal');</script>
+{% endif %}
+{% endif %}
+
+<!-- Edit Entry Modal (separate from View) -->
+{% if edit_e is defined %}
+<div id="editModal" class="fixed inset-0 z-50 {% if not open_edit_modal %}hidden{% endif %}">
+  <div class="absolute inset-0 bg-black/40" onclick="closeModal('editModal')"></div>
+  <div class="relative max-w-3xl mx-auto mt-10 w-[92%]">
+    <div class="bg-white rounded-2xl shadow-xl max-h-[88vh] overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="px-6 pt-6 pb-3 flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold">Edit: {{ edit_e.entry_name }}</h3>
+          <p class="text-sm text-slate-500">{{ edit_e.entry_date.isoformat() }}</p>
+        </div>
+        <button class="text-slate-400 hover:text-slate-600" onclick="closeModal('editModal')">✕</button>
+      </div>
+
+      <div class="px-6 pb-6 space-y-8 overflow-y-auto">
+        <!-- Edit form -->
+        <section>
+          <h4 class="font-semibold mb-3">Details</h4>
+          <form method="post" action="{{ url_for('edit_entry_save', entry_id=edit_e.entry_id_str) }}" class="grid grid-cols-1 gap-4">
+            <div>
+              <label class="text-sm block mb-1">Title</label>
+              <input name="title" value="{{ edit_e.entry_name }}" class="w-full rounded-xl border px-3 py-2" />
+            </div>
+
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="text-sm block mb-1">Year</label>
+                <input name="year" type="number" value="{{ edit_e.entry_date.year }}" class="w-full rounded-xl border px-3 py-2" />
+              </div>
+              <div>
+                <label class="text-sm block mb-1">Month</label>
+                <input name="month" type="number" value="{{ edit_e.entry_date.month }}" class="w-full rounded-xl border px-3 py-2" />
+              </div>
+              <div>
+                <label class="text-sm block mb-1">Day</label>
+                <input name="day" type="number" value="{{ edit_e.entry_date.day }}" class="w-full rounded-xl border px-3 py-2" />
+              </div>
+            </div>
+
+            <div>
+              <label class="text-sm block mb-2">Ranking (1–8)</label>
+              <div class="grid grid-cols-4 gap-2">
+                {% for r in range(1,9) %}
+                  <label class="cursor-pointer flex items-center justify-center gap-2 rounded-xl border px-3 py-2 hover:bg-slate-50">
+                    <input type="radio" name="ranking" value="{{ r }}" {% if r==edit_e.ranking %}checked{% endif %} class="mr-2">
+                    <span class="text-lg">{{ ranking_emoji(r) }}</span>
+                    <span class="text-sm text-slate-700">{{ r }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div>
+              <label class="text-sm block mb-1">Body</label>
+              <textarea name="body" rows="6" class="w-full rounded-xl border px-3 py-2">{{ edit_e.entry_body }}</textarea>
+            </div>
+
+            <div class="flex items-center justify-end">
+              <button class="rounded-xl px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500">Save Changes</button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Tag Management -->
+        <section>
+          <h4 class="font-semibold mb-3">Tags</h4>
+
+          {% if edit_e.tags %}
+            <div class="flex flex-wrap gap-2 mb-3">
+              {% for t in edit_e.tags %}
+                <form method="post" action="{{ url_for('delete_tag', entry_id=edit_e.entry_id_str) }}" class="inline">
+                  <input type="hidden" name="tag" value="{{ t }}">
+                  <button class="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-3 py-1 text-xs hover:bg-slate-200" title="Remove tag">
+                    #{{ t }} <span aria-hidden="true">✕</span>
+                  </button>
+                </form>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-sm text-slate-500 mb-3">No tags yet.</div>
+          {% endif %}
+
+          <form method="post" action="{{ url_for('add_tag', entry_id=edit_e.entry_id_str) }}" class="flex items-center gap-2">
+            <input name="tag" class="flex-1 rounded-xl border px-3 py-2" placeholder="Add a tag (e.g., study)" />
+            <button class="rounded-xl px-3 py-2 bg-slate-900 text-white hover:bg-slate-700">Add</button>
+          </form>
+
+          {% if edit_e.tags %}
+            <form method="post" action="{{ url_for('clear_tags', entry_id=edit_e.entry_id_str) }}" class="mt-3">
+              <button class="rounded-xl px-3 py-2 bg-slate-100 hover:bg-slate-200">Clear All Tags</button>
+            </form>
+          {% endif %}
+        </section>
+      </div>
+
+      <!-- Footer -->
+      <div class="px-6 py-4 border-t bg-white flex items-center gap-3">
+        <a href="{{ url_for('view_entry', entry_id=edit_e.entry_id_str) }}" class="rounded-xl px-4 py-2 bg-slate-100 hover:bg-slate-200">View</a>
+        <button class="rounded-xl px-4 py-2 bg-slate-900 text-white hover:bg-slate-700 ml-auto" onclick="closeModal('editModal')">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% if open_edit_modal %}
+<script>openModal('editModal');</script>
+{% endif %}
+{% endif %}
 {% endblock %}
