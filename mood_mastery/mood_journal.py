@@ -53,6 +53,25 @@ class Mood_Journal:
         self.streak_longest = 0
         self.last_entry_date = None
 
+    def _to_date(self, d) -> date:
+        """
+        Normalize various date shapes to datetime.date.
+        Supports:
+          - datetime.date
+          - (day, month, year) tuple
+          - Entry.entry_date as either of the above
+        """
+        if isinstance(d, date):
+            return d
+        if isinstance(d, tuple) and len(d) == 3:
+            day, month, year = d
+            return date(year, month, day)
+        # Fallback: today (shouldn't happen if Entry is consistent)
+        return date.today()
+
+    def _entry_date(self, e: Entry) -> date:
+        return self._to_date(e.entry_date)
+        
     def mj_log_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int,
                  entry_body: str, ranking: int, tags=None, biometrics=None) -> str:
         """
@@ -230,3 +249,75 @@ class Mood_Journal:
             for i in entries_to_report:
                 emoji_count[self.entries_dict[i].ranking - 1] += 1
             return emoji_count
+
+    def mj_entries_on(self, year: int, month: int, day: int) -> List[Entry]:
+        """
+        UI selects a date → return entries for that date
+        """
+        target = date(year, month, day)
+        items = [e for e in self.entries_dict.values() if self._entry_date(e) == target]
+    
+        items.sort(key=lambda e: (
+            getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
+            getattr(e, "entry_name", ""),
+            getattr(e, "entry_id_str", "")
+        ))
+        return items
+
+    def mj_entries_between(self, start: date, end: date) -> List[Entry]:
+        """
+        Return all entries where start <= entry_date <= end, sorted by date then created_at.
+        """
+        items = []
+        for e in self.entries_dict.values():
+            d = self._entry_date(e)
+            if start <= d <= end:
+                items.append(e)
+        items.sort(key=lambda e: (
+            self._entry_date(e),
+            getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
+            getattr(e, "entry_id_str", "")
+        ))
+        return items
+
+    def mj_entries_grouped_by_day(self, start: date, end: date) -> Dict[date, List[Entry]]:
+        """
+        Calendar-friendly structure: {date: [entries...]}, including empty days in range.
+        """
+        # all days start with empty lists so the UI can render blanks for no-entry dates
+        days: Dict[date, List[Entry]] = {}
+        cur = start
+        while cur <= end:
+            days[cur] = []
+            cur += timedelta(days=1)
+
+        for e in self.entries_dict.values():
+            d = self._entry_date(e)
+            if start <= d <= end:
+                days[d].append(e)
+
+        for d, lst in days.items():
+            lst.sort(key=lambda e: (
+                getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
+                getattr(e, "entry_name", ""),
+                getattr(e, "entry_id_str", "")
+            ))
+        return days
+
+    def mj_month_calendar(self, year: int, month: int) -> Dict[date, List[Entry]]:
+        """
+        give the whole visible month grid (from the calendar’s first weekday to last).
+        """
+        # First of month
+        first = date(year, month, 1)
+        # Start on Monday (ISO) for backend; align with UI if it uses Sunday
+        start = first - timedelta(days=(first.weekday()))  # weekday(): Mon=0..Sun=6
+        # Compute last day of month
+        if month == 12:
+            next_first = date(year + 1, 1, 1)
+        else:
+            next_first = date(year, month + 1, 1)
+        last = next_first - timedelta(days=1)
+        # End on Sunday to close the grid
+        end = last + timedelta(days=(6 - last.weekday()))
+        return self.mj_entries_grouped_by_day(start, end)
