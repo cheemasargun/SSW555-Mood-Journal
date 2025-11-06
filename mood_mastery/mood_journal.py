@@ -30,7 +30,7 @@ in entry.py and mood_journal.py
 from extensions import db
 from datetime import datetime, date, timedelta
 from mood_mastery.entry import Entry
-from typing import Optional
+from typing import Optional, Dict, List, Tuple
 
 class Mood_Journal:
     # Attributes (TO BE UPDATED) (if we need attributes here, really)
