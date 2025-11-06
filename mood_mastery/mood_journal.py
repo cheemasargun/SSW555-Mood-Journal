@@ -31,10 +31,14 @@ from extensions import db
 from datetime import datetime
 import datetime
 from mood_mastery.entry import Entry
+from typing import Optional
 
 class Mood_Journal:
     # Attributes (TO BE UPDATED) (if we need attributes here, really)
     entries_dict = {}
+    streak_current = 0
+    streak_longest = 0
+    last_entry_date : Optional[date] = None
 
     def __init__(self):
         # TODO
@@ -46,18 +50,31 @@ class Mood_Journal:
         # delete_entry, even if not specifically for a database just yet
         
         self.entries_dict = {}
+        self.streak_current = 0
+        self.streak_longest = 0
+        self.last_entry_date = None
 
-    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int):
-        new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking)
+    def mj_log_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int,
+                 entry_body: str, ranking: int, tags=None) -> str:
+        """
+        Create an entry and update the streaks. Returns the new entry's id.
+        """
+        entry_id = self.mj_create_entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, tags)
+        new_entry = self.mj_get_entry(entry_id)
+        self.update_streak(new_entry.entry_date)
+        return entry_id
+
+    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, tags=None):
+        new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, tags)
         new_entry_id = new_entry.entry_id_str
         self.entries_dict[new_entry_id] = new_entry
+        self.recompute_streak()
         return new_entry_id
 
     def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int):
         (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking)
 
-    def mj_delete_entry(entry_id: int):
-        # TODO
+    def mj_delete_entry(self, entry_id_str: str):
         # I imagine this would search for an entry's unique id and remove it from the database.
 
         # We can probably have this implemented using a dictionary if the database might take

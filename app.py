@@ -1,134 +1,234 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, flash
+from datetime import date
 import os
 
-from extensions import db
+# Import your classes
+try:
+    from mood_mastery.user import User
+except Exception:
+    from user import User
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = os.environ.get("MOOD_DEMO_SECRET", "dev-secret")
 
-db.init_app(app)
+# Single demo user (in-memory)
+user = User()
 
-from models import Habit, MoodEntry, Expense, Recipe  # noqa: E402
+# -------- Helpers --------
+def ranking_emoji(rank: int) -> str:
+    mapping = {
+        1: "😵", 2: "😖", 3: "🙁", 4: "😢",
+        5: "😡", 6: "😐", 7: "🙂", 8: "😄",
+    }
+    try:
+        return mapping.get(int(rank), "🙂")
+    except Exception:
+        return "🙂"
 
-@app.route('/')
-def home():
-    return render_template('home/index.html', page_id='home')
+@app.context_processor
+def inject_helpers():
+    return dict(ranking_emoji=ranking_emoji)
 
-@app.route('/habit-tracker', methods=['GET', 'POST'])
-def habit_tracker():
-    if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        description = request.form.get('description', '').strip()
+def get_today():
+    t = date.today()
+    return {"year": t.year, "month": t.month, "day": t.day}
 
-        if name:
-            habit = Habit(name=name, description=description or None)
-            db.session.add(habit)
-            db.session.commit()
+def _render_index(**extra):
+    entries = user.user_mood_journal.mj_get_all_entries()
+    entries.sort(key=lambda e: (e.entry_date, e.entry_name), reverse=True)
+    s = user.user_mood_journal.get_streak_summary()
+    summary = {
+        "current": s["current_streak"],
+        "longest": s["longest_streak"],
+        "last": s["last_entry_date"].isoformat() if s["last_entry_date"] else None,
+    }
+    base_ctx = dict(
+        entries=entries,
+        summary=summary,
+        today=get_today(),
+        password_set=(user.user_entries_pwd_encrypted is not None),
+    )
+    base_ctx.update(extra)
+    return render_template("apps/mood_journal/index.html", **base_ctx)
 
-        return redirect(url_for('habit_tracker'))
-
-    habits = Habit.query.order_by(Habit.created_at.desc()).all()
-    return render_template('apps/habit_tracker/index.html', page_id='habit-tracker', habits=habits)
-
-@app.route('/mood-journal', methods=['GET', 'POST'])
-def mood_journal():
-    if request.method == 'POST':
-        mood = request.form.get('mood', '').strip()
-        notes = request.form.get('notes', '').strip()
-
-        if mood:
-            entry = MoodEntry(mood=mood, notes=notes or None)
-            db.session.add(entry)
-            db.session.commit()
-
-        return redirect(url_for('mood_journal'))
-
-    entries = MoodEntry.query.order_by(MoodEntry.created_at.desc()).all()
-    return render_template('apps/mood_journal/index.html', page_id='mood-journal', entries=entries)
-
-@app.route('/expense-splitter', methods=['GET', 'POST'])
-def expense_splitter():
-    if request.method == 'POST':
-        description = request.form.get('description', '').strip()
-        amount_raw = request.form.get('amount', '').strip()
-        payer = request.form.get('payer', '').strip()
-        participants = request.form.get('participants', '').strip()
-
-        try:
-            amount = float(amount_raw)
-        except ValueError:
-            amount = None
-
-        if description and amount is not None and payer:
-            expense = Expense(
-                description=description,
-                amount=amount,
-                payer=payer,
-                participants=participants or None
-            )
-            db.session.add(expense)
-            db.session.commit()
-
-        return redirect(url_for('expense_splitter'))
-
-    expenses = Expense.query.order_by(Expense.created_at.desc()).all()
-    expense_views = []
-    for expense in expenses:
-        people = [p.strip() for p in (expense.participants or '').split(',') if p.strip()]
-        share = expense.amount / len(people) if people else None
-        expense_views.append({
-            'model': expense,
-            'participants': people,
-            'share': share
-        })
-
-    return render_template(
-        'apps/expense_splitter/index.html',
-        page_id='expense-splitter',
-        expenses=expense_views
+def _open_view_modal(entry_id, body=None, ask_password=False):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    return _render_index(
+        view_e=e,
+        view_body=body,
+        view_ask_password=ask_password,
+        open_view_modal=True,
     )
 
-@app.route('/recipe-assistant', methods=['GET', 'POST'])
-def recipe_assistant():
-    if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        ingredients = request.form.get('ingredients', '').strip()
-        instructions = request.form.get('instructions', '').strip()
-        prep_time_raw = request.form.get('prep_time', '').strip()
-
-        try:
-            prep_time = int(prep_time_raw)
-            if prep_time < 0:
-                prep_time = None
-        except ValueError:
-            prep_time = None
-
-        if name and ingredients and instructions:
-            recipe = Recipe(
-                name=name,
-                ingredients=ingredients,
-                instructions=instructions,
-                prep_time=prep_time
-            )
-            db.session.add(recipe)
-            db.session.commit()
-
-        return redirect(url_for('recipe_assistant'))
-
-    recipes = Recipe.query.order_by(Recipe.created_at.desc()).all()
-    return render_template(
-        'apps/recipe_assistant/index.html',
-        page_id='recipe-assistant',
-        recipes=recipes
+def _open_edit_modal(entry_id):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    return _render_index(
+        edit_e=e,
+        open_edit_modal=True,
     )
 
-def init_db():
-    with app.app_context():
-        db.create_all()
+# -------- Routes --------
+@app.route("/")
+def index():
+    return _render_index()
 
-if __name__ == '__main__':
-    if not os.path.exists('app.db'):
-        init_db()
+@app.route("/add", methods=["POST"])
+def add_entry():
+    f = request.form
+    try:
+        title = f.get("title", "Untitled").strip()
+        year = int(f.get("year")); month = int(f.get("month")); day = int(f.get("day"))
+        ranking = int(f.get("ranking", 5))
+        body = f.get("body", "").strip()
+        tags_raw = f.get("tags", "").strip()
+        tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else None
+
+        user.user_mood_journal.mj_log_entry(
+            entry_name=title,
+            entry_day=day, entry_month=month, entry_year=year,
+            entry_body=body, ranking=ranking, tags=tags
+        )
+        flash("Entry created!", "success")
+    except Exception as ex:
+        flash(f"Failed to create entry: {ex}", "error")
+    return redirect(url_for("index"))
+
+# optional mirror if an old template posts to /mood-journal
+@app.route("/mood-journal", methods=["POST"])
+def add_entry_mirror():
+    return add_entry()
+
+# ---- VIEW (separate) ----
+@app.route("/entry/<entry_id>")
+def view_entry(entry_id):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+    obj = user.view_entry(entry_id)  # Entry or False (if private)
+    body = obj.entry_body if obj and hasattr(obj, "entry_body") else None
+    ask_password = (body is None) and e.is_private_check()
+    return _open_view_modal(entry_id, body=body, ask_password=ask_password)
+
+@app.route("/entry/<entry_id>/unlock", methods=["POST"])
+def unlock_entry(entry_id):
+    pwd = request.form.get("password", "")
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+    obj = user.view_entry(entry_id, entry_pwd_attempt=pwd)
+    if obj is False:
+        flash("Incorrect password.", "error")
+        return _open_view_modal(entry_id, body=None, ask_password=True)
+    return _open_view_modal(entry_id, body=obj.entry_body, ask_password=False)
+
+@app.route("/privacy/<entry_id>", methods=["POST"])
+def make_private(entry_id):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    if user.user_entries_pwd_encrypted is None:
+        pwd = request.form.get("password")
+        if not pwd:
+            flash("Create a password to enable privacy.", "error")
+            return _open_view_modal(entry_id, body=None, ask_password=True)
+        ok = user.privatize_entry(entry_id_str=entry_id, user_entries_pwd=pwd)
+    else:
+        ok = user.privatize_entry(entry_id_str=entry_id)
+
+    flash("Entry set to private." if ok else "Could not set privacy.", "success" if ok else "error")
+    # After making private, body will be hidden until unlocked
+    return _open_view_modal(entry_id, body=None, ask_password=True if ok else False)
+
+@app.route("/delete/<entry_id>", methods=["POST"])
+def delete_entry(entry_id):
+    if user.user_mood_journal.mj_delete_entry(entry_id):
+        flash("Entry deleted.", "success")
+    else:
+        flash("Could not delete entry.", "error")
+    return redirect(url_for("index"))
+
+# ---- EDIT (separate) ----
+@app.route("/entry/<entry_id>/edit")
+def edit_entry_open(entry_id):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+    return _open_edit_modal(entry_id)
+
+@app.route("/entry/<entry_id>/edit", methods=["POST"])
+def edit_entry_save(entry_id):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    f = request.form
+    try:
+        new_title = f.get("title", e.entry_name).strip() or e.entry_name
+        new_year = int(f.get("year", e.entry_date.year))
+        new_month = int(f.get("month", e.entry_date.month))
+        new_day = int(f.get("day", e.entry_date.day))
+        new_body = f.get("body", e.entry_body)
+        new_rank = int(f.get("ranking", e.ranking))
+
+        user.user_mood_journal.mj_edit_entry(
+            entry_id_str=entry_id,
+            new_name=new_title,
+            new_day=new_day,
+            new_month=new_month,
+            new_year=new_year,
+            new_body=new_body,
+            new_ranking=new_rank
+        )
+        flash("Entry updated.", "success")
+    except Exception as ex:
+        flash(f"Failed to update entry: {ex}", "error")
+
+    return _open_edit_modal(entry_id)
+
+# ---- TAGS (on the Edit feature) ----
+@app.route("/entry/<entry_id>/tags/add", methods=["POST"])
+def add_tag(entry_id):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+    tag = (request.form.get("tag") or "").strip()
+    if not tag:
+        flash("Tag cannot be empty.", "error")
+    elif e.add_tag(tag):
+        flash(f"Tag “{tag}” added.", "success")
+    else:
+        flash(f"Tag “{tag}” already exists or invalid.", "error")
+    return _open_edit_modal(entry_id)
+
+@app.route("/entry/<entry_id>/tags/delete", methods=["POST"])
+def delete_tag(entry_id):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+    tag = (request.form.get("tag") or "").strip()
+    if e.remove_tag(tag):
+        flash(f"Tag “{tag}” removed.", "success")
+    else:
+        flash(f"Tag “{tag}” not found.", "error")
+    return _open_edit_modal(entry_id)
+
+@app.route("/entry/<entry_id>/tags/clear", methods=["POST"])
+def clear_tags(entry_id):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+    e.clear_tags()
+    flash("All tags cleared.", "success")
+    return _open_edit_modal(entry_id)
+
+if __name__ == "__main__":
     app.run(debug=True)
