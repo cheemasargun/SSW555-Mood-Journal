@@ -187,15 +187,38 @@ class Mood_Journal:
 
     def mj_weekly_report(self, curr_day, curr_month, curr_year):
         curr_date = datetime.date(curr_year, curr_month, curr_day)
-        monthly_dates = []
+        weekly_dates = []
 
         for i in range(7):
-            monthly_dates.append(curr_date - datetime.timedelta(days = i))
+            weekly_dates.append(curr_date - datetime.timedelta(days = i))
         
         entries_to_report = []
 
         for i in self.entries_dict.keys():
             for d in weekly_dates:
+                if self.entries_dict[i].entry_date == d:
+                    entries_to_report.append(i)
+        
+        emoji_count =  [0, 0, 0, 0, 0, 0, 0, 0]
+
+        if len(entries_to_report) == 0:
+            return None
+        else:
+            for i in entries_to_report:
+                emoji_count[self.entries_dict[i].ranking - 1] += 1
+            return emoji_count
+    
+    def mj_monthly_report(self, curr_day, curr_month, curr_year):
+        curr_date = datetime.date(curr_year, curr_month, curr_day)
+        monthly_dates = []
+
+        for i in range(30):
+            monthly_dates.append(curr_date - datetime.timedelta(days = i))
+        
+        entries_to_report = []
+
+        for i in self.entries_dict.keys():
+            for d in monthly_dates:
                 if self.entries_dict[i].entry_date == d:
                     entries_to_report.append(i)
         
