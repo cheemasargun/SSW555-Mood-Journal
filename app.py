@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
-from datetime import date
+from datetime import date,timedelta
 import os
 
 # Import your classes
@@ -273,6 +273,51 @@ def clear_biometric(entry_id, key):
     else:
         flash("Nothing to clear.", "error")
     return _open_edit_modal(entry_id)
+
+def _build_report(kind: str):
+    """
+    kind: 'weekly' or 'monthly'
+    Returns payload for the modal: {title, counts, total, start, end, bars}
+    """
+    today = date.today()
+    if kind == "weekly":
+        counts = user.user_mood_journal.mj_weekly_report(today.day, today.month, today.year) or [0]*8
+        days = 7
+        title = "Weekly Report"
+    else:
+        counts = user.user_mood_journal.mj_monthly_report(today.day, today.month, today.year) or [0]*8
+        days = 30
+        title = "Monthly Report"
+
+    start = (today - timedelta(days=days-1))
+    total = sum(counts)
+    maxc = max(counts) if counts else 0
+
+    bars = []
+    for i, c in enumerate(counts):
+        rank = i + 1
+        pct = int((c / maxc) * 100) if maxc > 0 else 0
+        bars.append({"rank": rank, "emoji": ranking_emoji(rank), "count": c, "pct": pct})
+
+    return {
+        "title": title,
+        "counts": counts,
+        "total": total,
+        "start": start.isoformat(),
+        "end": today.isoformat(),
+        "bars": bars,
+    }
+
+@app.route("/report/weekly")
+def weekly_report():
+    report = _build_report("weekly")
+    return _render_index(report=report, open_report_modal=True)
+
+@app.route("/report/monthly")
+def monthly_report():
+    report = _build_report("monthly")
+    return _render_index(report=report, open_report_modal=True)
+
 
 if __name__ == "__main__":
     app.run(debug=True)

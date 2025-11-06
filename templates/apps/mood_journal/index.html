@@ -24,34 +24,40 @@
 </div>
 
 <div class="grid lg:grid-cols-2 gap-8">
-  <!-- Left: Streak + Add -->
-  <div class="space-y-6">
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-xl">🔥</span>
-          <h3 class="text-lg font-semibold text-gray-900">Streak</h3>
-        </div>
-        <button onclick="openModal('addModal')" class="rounded-lg px-3 py-2 bg-indigo-600 text-white hover:bg-indigo-500">
+  <!-- Left: Quick actions -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🔥</span>
+        <h3 class="text-lg font-semibold text-gray-900">Streak</h3>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="{{ url_for('weekly_report') }}"
+           class="rounded-lg px-3 py-2 bg-slate-100 text-slate-900 hover:bg-slate-200">Weekly</a>
+        <a href="{{ url_for('monthly_report') }}"
+           class="rounded-lg px-3 py-2 bg-slate-100 text-slate-900 hover:bg-slate-200">Monthly</a>
+        <button onclick="openModal('addModal')"
+                class="rounded-lg px-3 py-2 bg-indigo-600 text-white hover:bg-indigo-500">
           + Add Entry
         </button>
       </div>
-      {% set s = summary %}
-      <dl class="grid grid-cols-3 gap-4 text-center mt-4">
-        <div class="bg-slate-50 rounded-xl p-4">
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Current</dt>
-          <dd class="text-2xl font-bold mt-1">{{ s.current }}</dd>
-        </div>
-        <div class="bg-slate-50 rounded-xl p-4">
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Longest</dt>
-          <dd class="text-2xl font-bold mt-1">{{ s.longest }}</dd>
-        </div>
-        <div class="bg-slate-50 rounded-xl p-4">
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Last Entry</dt>
-          <dd class="text-sm font-medium mt-1">{{ s.last or "—" }}</dd>
-        </div>
-      </dl>
     </div>
+    {% if summary is defined %}
+      <div class="grid grid-cols-3 gap-4 text-center mt-6">
+        <div class="bg-slate-50 rounded-xl p-4">
+          <div class="text-xs uppercase tracking-wide text-slate-500">Current</div>
+          <div class="text-2xl font-bold mt-1">{{ summary.current }}</div>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4">
+          <div class="text-xs uppercase tracking-wide text-slate-500">Longest</div>
+          <div class="text-2xl font-bold mt-1">{{ summary.longest }}</div>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4">
+          <div class="text-xs uppercase tracking-wide text-slate-500">Last Entry</div>
+          <div class="text-sm font-medium mt-1">{{ summary.last or "—" }}</div>
+        </div>
+      </div>
+    {% endif %}
   </div>
 
   <!-- Right: Entries -->
@@ -85,6 +91,7 @@
                   {% endif %}
                 </div>
                 <p class="text-xs text-gray-500">{{ e.entry_date.isoformat() }}</p>
+
                 {% set bios = e.get_biometrics() if e.get_biometrics else {} %}
                 {% if bios %}
                   <div class="mt-2 flex flex-wrap gap-2">
@@ -93,6 +100,7 @@
                     {% endfor %}
                   </div>
                 {% endif %}
+
                 {% if e.tags %}
                   <div class="mt-2 flex flex-wrap gap-2">
                     {% for t in e.tags %}
@@ -339,7 +347,7 @@
       </div>
 
       <div class="px-6 pb-6 space-y-8 overflow-y-auto">
-        <!-- Edit form -->
+        <!-- 1) Main edit form -->
         <section>
           <h4 class="font-semibold mb-3">Details</h4>
           <form method="post" action="{{ url_for('edit_entry_save', entry_id=edit_e.entry_id_str) }}" class="grid grid-cols-1 gap-4">
@@ -381,40 +389,47 @@
               <textarea name="body" rows="6" class="w-full rounded-xl border px-3 py-2">{{ edit_e.entry_body }}</textarea>
             </div>
 
-            <!-- Biometrics (Edit) -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Biometrics</label>
-              <div class="grid sm:grid-cols-2 gap-3">
-                {% set current = edit_e.get_biometrics() if edit_e.get_biometrics else {} %}
-                {% for key, choices in BIOMETRICS.items() %}
-                  <div>
-                    <div class="flex items-center justify-between mb-1">
-                      <label class="text-xs text-slate-500">{{ key }}</label>
-                      {% if current.get(key) %}
-                        <form method="post" action="{{ url_for('clear_biometric', entry_id=edit_e.entry_id_str, key=key) }}">
-                          <button class="text-xs text-rose-600 hover:underline" title="Clear">Clear</button>
-                        </form>
-                      {% endif %}
-                    </div>
-                    <select name="bio_{{ key }}" class="w-full rounded-xl border px-3 py-2">
-                      <option value="">—</option>
-                      {% for v in choices %}
-                        <option value="{{ v }}" {% if current.get(key)==v %}selected{% endif %}>{{ v|title }}</option>
-                      {% endfor %}
-                    </select>
-                  </div>
-                {% endfor %}
-              </div>
-              <p class="text-xs text-slate-500 mt-2">Leave a field as “—” to keep it unchanged. Use “Clear” to remove an existing value.</p>
-            </div>
-
             <div class="flex items-center justify-end">
               <button class="rounded-xl px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500">Save Changes</button>
             </div>
           </form>
         </section>
 
-        <!-- Tag Management -->
+        <!-- 2) Biometrics form -->
+        <section>
+          <h4 class="font-semibold mb-3">Biometrics</h4>
+          <form method="post" action="{{ url_for('edit_entry_save', entry_id=edit_e.entry_id_str) }}" class="grid grid-cols-1 gap-4">
+            <div class="grid sm:grid-cols-2 gap-3">
+              {% set current = edit_e.get_biometrics() if edit_e.get_biometrics else {} %}
+              {% for key, choices in BIOMETRICS.items() %}
+                <div>
+                  <label class="text-xs text-slate-500 block mb-1">{{ key }}</label>
+                  <select name="bio_{{ key }}" class="w-full rounded-xl border px-3 py-2">
+                    <option value="">—</option>
+                    {% for v in choices %}
+                      <option value="{{ v }}" {% if current.get(key)==v %}selected{% endif %}>{{ v|title }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="flex items-center justify-end">
+              <button class="rounded-xl px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500">Save Biometrics</button>
+            </div>
+          </form>
+
+          {% if current %}
+          <div class="mt-3 flex flex-wrap gap-2">
+            {% for key, val in current.items() %}
+              <form method="post" action="{{ url_for('clear_biometric', entry_id=edit_e.entry_id_str, key=key) }}">
+                <button class="text-xs text-rose-600 hover:underline" title="Clear {{ key }}">Clear {{ key }}</button>
+              </form>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </section>
+
+        <!-- 3) Tag Management -->
         <section>
           <h4 class="font-semibold mb-3">Tags</h4>
 
@@ -456,6 +471,46 @@
 </div>
 {% if open_edit_modal %}
 <script>openModal('editModal');</script>
+{% endif %}
+{% endif %}
+<!-- Report Modal (weekly/monthly) -->
+{% if report is defined %}
+<div id="reportModal" class="fixed inset-0 z-50 {% if not open_report_modal %}hidden{% endif %}">
+  <div class="absolute inset-0 bg-black/40" onclick="closeModal('reportModal')"></div>
+  <div class="relative max-w-3xl mx-auto mt-10 w-[92%]">
+    <div class="bg-white rounded-2xl shadow-xl max-h-[88vh] overflow-hidden flex flex-col">
+      <div class="px-6 pt-6 pb-3 flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold">{{ report.title }}</h3>
+          <p class="text-sm text-slate-500">{{ report.start }} → {{ report.end }}</p>
+        </div>
+        <button class="text-slate-400 hover:text-slate-600" onclick="closeModal('reportModal')">✕</button>
+      </div>
+
+      <div class="px-6 pb-6 space-y-4 overflow-y-auto">
+        <div class="text-sm text-slate-600">Total entries: <strong>{{ report.total }}</strong></div>
+        <div class="space-y-2">
+          {% for bar in report.bars %}
+          <div>
+            <div class="flex items-center justify-between text-sm">
+              <span>{{ bar.emoji }} Rank {{ bar.rank }}</span>
+              <span class="text-slate-500">{{ bar.count }}</span>
+            </div>
+            <div class="w-full h-2 bg-slate-100 rounded-full mt-1">
+              <div class="h-2 bg-indigo-500 rounded-full" style="width: {{ bar.pct }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t bg-white flex items-center justify-end">
+        <button class="rounded-xl px-4 py-2 bg-slate-900 text-white hover:bg-slate-700" onclick="closeModal('reportModal')">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% if open_report_modal %}
+<script>openModal('reportModal');</script>
 {% endif %}
 {% endif %}
 {% endblock %}
