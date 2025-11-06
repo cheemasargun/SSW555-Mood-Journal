@@ -28,8 +28,7 @@ in entry.py and mood_journal.py
 """
 
 from extensions import db
-from datetime import datetime
-import datetime
+from datetime import datetime, date, timedelta
 from mood_mastery.entry import Entry
 from typing import Optional
 
@@ -84,31 +83,104 @@ class Mood_Journal:
 
         # In the meantime: use the del statement to delete the entry of the given entry_id from
         # self.entries_dict // example of formatting: del my_dict[id]
-        pass
 
-    def mj_report(self, curr_day, curr_month, curr_year, weekly):
-        curr_date = datetime.date(curr_year, curr_month, curr_day)
-        monthly_dates = []
-
-        if weekly:
-            for i in range(7):
-                monthly_dates.append(curr_date - datetime.timedelta(days = i))
+        if entry_id_str in self.entries_dict:
+            del self.entries_dict[entry_id_str]
+            self.recompute_streak()
+            return True
         else:
-            for i in range(30):
-                monthly_dates.append(curr_date - datetime.timedelta(days = i))
-        
-        entries_to_report = []
+            return False
 
-        for i in self.entries_dict.keys():
-            for d in weekly_dates:
-                if self.entries_dict[i].entry_date == d:
-                    entries_to_report.append(i)
-        
-        emoji_count =  [0, 0, 0, 0, 0, 0, 0, 0]
+    def mj_get_entry(self, entry_id_str: str):
+        """
+        Returns the Entry object of id entry_id_str if such an entry exists.
+        Otherwise, returns False.
 
-        if len(entries_to_report) == 0:
-            return None
+        Parameters -------------------------
+        - entry_id_str : str        // The id of the Entry object the user wishes to search for
+        """
+        if entry_id_str in self.entries_dict:
+            return self.entries_dict[entry_id_str]
         else:
-            for i in entries_to_report:
-                emoji_count[self.entries_dict[i].ranking - 1] += 1
-            return emoji_count
+            return False # No such entry exists
+        
+    def mj_get_entry_privacy_status(self, entry_id_str: str):
+        """
+        Returns the privacy status of an Entry of entry_id_str if such an entry exists.
+        Otherwise, returns None.
+
+        Parameters -------------------------
+        - entry_id_str : str        // The id of the Entry object the user wishes to search for
+        """
+        if(self.mj_get_entry(entry_id_str) ==  False):
+            return None # No such entry exists
+        else:
+            # Returns true if entry is private; False if not
+            return self.mj_get_entry(entry_id_str).is_private_check()
+        
+    "Returns all the mood entries"
+    def mj_get_all_entries(self):
+        return list(self.entries_dict.values())
+    
+    """Streak System"""
+    def recompute_streak(self):
+        """
+        Recompute current/longest streak from all entries.
+        """
+        entries = self.mj_get_all_entries()
+        if not entries:
+            self.streak_current = 0
+            self.streak_longest = 0
+            self.last_entry_date = None 
+            return 
+        #get unqiue entry dates
+        dates = sorted({e.entry_date for e in entries})
+        self.last_entry_date = dates[-1]
+
+        #Longest streak
+        longest = 1
+        run = 1
+        for i in range(1,len(dates)):
+            if (dates[i] -dates[i-1]) == timedelta(days=1):
+                run +=1
+            else:
+                longest = max(longest,run)
+                run = 1
+        longest = max(longest,run)
+        #Current streak
+        current = 1
+        for j in range(len(dates)-1,0,-1):
+            if(dates[j] - dates[j-1]) == timedelta(days=1):
+                current +=1 
+            else:
+                break
+        self.streak_current = current
+        self.streak_longest = longest
+    def get_streak_summary(self):
+        return {
+            "current_streak": self.streak_current,
+            "longest_streak": self.streak_longest,
+            "last_entry_date": self.last_entry_date
+        }
+    def update_streak(self, entry_date: date):
+        "Used by log entry to update streak when entry is added for that day"
+        if self.last_entry_date is None:
+            self.last_entry_date = entry_date
+            self.streak_current = 1
+            self.streak_longest = max(self.streak_longest,self.streak_current)
+            return
+        if entry_date == self.last_entry_date:
+            return #entry already logged that day
+        if entry_date == self.last_entry_date + timedelta(days=1):
+            self.streak_current += 1
+            self.last_entry_date = entry_date
+            self.streak_longest = max(self.streak_longest,self.streak_current)
+            return
+        if entry_date > self.last_entry_date +timedelta(days=1):
+            #A gap breaks the current streak
+            self.streak_current = 1
+            self.last_entry_date = entry_date
+            self.streak_longest = max(self.streak_longest,self.streak_current)
+            return
+        #Else, recompute just incase
+        self.recompute_streak()
