@@ -5,7 +5,7 @@
 from mood_mastery.entry import Entry
 from mood_mastery.mood_journal import Mood_Journal
 from mood_mastery.user import User
-from datetime import date
+from datetime import date, datetime
 import pytest
 
 """Create Entry Test"""
@@ -325,3 +325,149 @@ def test_mj_monthly_report():
     mjm.mj_create_entry("e1", 1, 1, 2025, "body", 3)
     assert mjm.mj_monthly_report(1, 1, 2025) == [0, 0, 1, 0, 0, 0, 0, 0]
     print("Monthly Report Test Passed")
+
+""" Testing Biometrics """
+def test_mj_create_entry_with_biometrics():
+    mj = Mood_Journal()
+
+    # Create entry
+    entry_id = mj.mj_create_entry(
+        "Bio Day",
+        5, 11, 2025,
+        "Testing biometrics with journal",
+        5
+    )
+
+    e = mj.mj_get_entry(entry_id)
+
+    # Set biometrics
+    assert e.set_biometric("Sleep", "well rested") is True
+    assert e.set_biometric("Physical Wellness", "energized") is True
+    assert e.set_biometric("Mental Wellness", "normal") is True
+    assert e.set_biometric("Menstruation", "no") is True
+
+    # Validate stored data
+    result = e.get_biometrics()
+    assert result == {
+        "Sleep": "well rested",
+        "Physical Wellness": "energized",
+        "Mental Wellness": "normal",
+        "Menstruation": "no"
+    }
+
+def test_mj_biometrics_update_and_delete():
+    mj = Mood_Journal()
+    entry_id = mj.mj_create_entry("Bio Update", 6, 11, 2025, "body", 4)
+    e = mj.mj_get_entry(entry_id)
+
+    # Add a biometric
+    e.set_biometric("Sleep", "sleepy")
+    assert e.get_biometrics() == {"Sleep": "sleepy"}
+
+    # Update it
+    e.set_biometric("Sleep", "meh")
+    assert e.get_biometrics()["Sleep"] == "meh"
+
+    # Delete it
+    assert e.delete_biometric("Sleep") is True
+    assert e.get_biometrics() == {}
+
+""" Testing Timeline/Calendar"""
+def _attach_created_at(entry, dt):
+    """Helper to attach created_at for deterministic ordering in tests."""
+    setattr(entry, "created_at", dt)
+    return entry
+
+def test_mj_entries_on_filters_by_day_and_sorts():
+    mj = Mood_Journal()
+
+    # Two entries on Nov 5, one on Nov 6
+    id1 = mj.mj_create_entry("Zeta", 5, 11, 2025, "body", 3)
+    id2 = mj.mj_create_entry("Alpha", 5, 11, 2025, "body", 7)
+    id3 = mj.mj_create_entry("Next Day", 6, 11, 2025, "body", 6)
+
+    # Attach created_at to ensure stable order: earlier first
+    _attach_created_at(mj.entries_dict[id1], datetime(2025, 11, 5, 9, 0, 0))
+    _attach_created_at(mj.entries_dict[id2], datetime(2025, 11, 5, 8, 59, 0))
+    _attach_created_at(mj.entries_dict[id3], datetime(2025, 11, 6, 10, 0, 0))
+
+    results_1105 = mj.mj_entries_on(2025, 11, 5)
+    assert [e.entry_id_str for e in results_1105] == [id2, id1], "Should return only Nov 5 entries sorted by created_at"
+
+    results_1106 = mj.mj_entries_on(2025, 11, 6)
+    assert [e.entry_id_str for e in results_1106] == [id3], "Should return only Nov 6 entry"
+
+
+def test_mj_entries_between_is_inclusive_and_sorted():
+    mj = Mood_Journal()
+
+    a1 = mj.mj_create_entry("A1", 4, 11, 2025, "a", 5)
+    a2 = mj.mj_create_entry("A2", 4, 11, 2025, "a", 5)
+    b1 = mj.mj_create_entry("B1", 5, 11, 2025, "b", 5)
+    c1 = mj.mj_create_entry("C1", 6, 11, 2025, "c", 5)
+    x = mj.mj_create_entry("X", 7, 11, 2025, "x", 5)  # outside range
+
+    _attach_created_at(mj.entries_dict[a1], datetime(2025, 11, 4, 9))
+    _attach_created_at(mj.entries_dict[a2], datetime(2025, 11, 4, 10))
+    _attach_created_at(mj.entries_dict[b1], datetime(2025, 11, 5, 8))
+    _attach_created_at(mj.entries_dict[c1], datetime(2025, 11, 6, 7))
+    _attach_created_at(mj.entries_dict[x],  datetime(2025, 11, 7, 7))
+
+    results = mj.mj_entries_between(date(2025, 11, 4), date(2025, 11, 6))
+    assert [e.entry_id_str for e in results] == [a1, a2, b1, c1], "Range must be inclusive and sorted by date then created_at"
+
+
+def test_mj_entries_grouped_by_day_includes_empty_days_and_sorts_each_bucket():
+    mj = Mood_Journal()
+
+    d1 = mj.mj_create_entry("D1", 3, 11, 2025, "d", 5)
+    e1 = mj.mj_create_entry("E1", 5, 11, 2025, "e", 5)
+    e2 = mj.mj_create_entry("E2", 5, 11, 2025, "e", 5)
+    f1 = mj.mj_create_entry("F1", 6, 11, 2025, "f", 5)
+
+    _attach_created_at(mj.entries_dict[d1], datetime(2025, 11, 3, 9))
+    _attach_created_at(mj.entries_dict[e1], datetime(2025, 11, 5, 8))
+    _attach_created_at(mj.entries_dict[e2], datetime(2025, 11, 5, 9))
+    _attach_created_at(mj.entries_dict[f1], datetime(2025, 11, 6, 7))
+
+    grouped = mj.mj_entries_grouped_by_day(date(2025, 11, 3), date(2025, 11, 6))
+
+    # All days present (including empty Nov 4)
+    assert date(2025, 11, 3) in grouped
+    assert date(2025, 11, 4) in grouped
+    assert date(2025, 11, 5) in grouped
+    assert date(2025, 11, 6) in grouped
+
+    # Empty day has empty list
+    assert grouped[date(2025, 11, 4)] == []
+
+    # Buckets sorted deterministically
+    assert [e.entry_id_str for e in grouped[date(2025, 11, 5)]] == [e1, e2]
+    assert [e.entry_id_str for e in grouped[date(2025, 11, 3)]] == [d1]
+    assert [e.entry_id_str for e in grouped[date(2025, 11, 6)]] == [f1]
+
+
+def test_mj_month_calendar_covers_full_grid_and_groups_entries():
+    mj = Mood_Journal()
+
+    m1 = mj.mj_create_entry("Morning", 5, 11, 2025, "m", 4)
+    m2 = mj.mj_create_entry("Evening", 5, 11, 2025, "m", 6)
+    mid = mj.mj_create_entry("Mid", 18, 11, 2025, "m", 2)
+
+    _attach_created_at(mj.entries_dict[m1], datetime(2025, 11, 5, 9))
+    _attach_created_at(mj.entries_dict[m2], datetime(2025, 11, 5, 20))
+    _attach_created_at(mj.entries_dict[mid], datetime(2025, 11, 18, 12))
+
+    cal = mj.mj_month_calendar(2025, 11)
+
+    # Should include dates needed to render a full Monday→Sunday grid
+    assert date(2025, 11, 5) in cal
+    assert date(2025, 11, 18) in cal
+
+    # Day with two entries appears in deterministic order
+    nov5_ids = [e.entry_id_str for e in cal[date(2025, 11, 5)]]
+    assert nov5_ids == [m1, m2]
+
+    # A random day with no entries is present and empty
+    assert date(2025, 11, 7) in cal
+    assert cal[date(2025, 11, 7)] == []
