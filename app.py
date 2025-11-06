@@ -6,7 +6,7 @@ import os
 try:
     from mood_mastery.user import User
 except Exception:
-    from user import User
+    from mood_mastery.user import User
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("MOOD_DEMO_SECRET", "dev-secret")
