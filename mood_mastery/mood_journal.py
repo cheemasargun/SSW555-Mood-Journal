@@ -186,11 +186,11 @@ class Mood_Journal:
         self.recompute_streak()
 
     def mj_weekly_report(self, curr_day, curr_month, curr_year):
-        curr_date = datetime.date(curr_year, curr_month, curr_day)
+        curr_date = date(curr_year, curr_month, curr_day)
         weekly_dates = []
 
         for i in range(7):
-            weekly_dates.append(curr_date - datetime.timedelta(days = i))
+            weekly_dates.append(curr_date - timedelta(days = i))
         
         entries_to_report = []
 
@@ -209,11 +209,11 @@ class Mood_Journal:
             return emoji_count
     
     def mj_monthly_report(self, curr_day, curr_month, curr_year):
-        curr_date = datetime.date(curr_year, curr_month, curr_day)
+        curr_date = date(curr_year, curr_month, curr_day)
         monthly_dates = []
 
         for i in range(30):
-            monthly_dates.append(curr_date - datetime.timedelta(days = i))
+            monthly_dates.append(curr_date - timedelta(days = i))
         
         entries_to_report = []
 
