@@ -312,16 +312,16 @@ def test_get_streak_summary_shape_and_types():
     led = s["last_entry_date"]
     assert (led is None) or isinstance(led, date)
 
-def mj_weekly_report_test():
+def test_mj_weekly_report():
     mj = Mood_Journal()
-    assert mj.mj_weekly_report(1, 1, 1, True) == None
-    mj.mj_create_entry("e1", 1, 1, 1, "body", 3)
-    assert mj.mj_report(1, 1, 1, True) == [0, 0, 1, 0, 0, 0, 0, 0]
+    assert mj.mj_weekly_report(1, 1, 2025) == None
+    mj.mj_create_entry("e1", 1, 1, 2025, "body", 3)
+    assert mj.mj_weekly_report(1, 1, 2025) == [0, 0, 1, 0, 0, 0, 0, 0]
     print("Report Test Passed")
 
-def mj_monthly_report_test():
-    mj = Mood_Journal()
-    assert mj.mj_monthly_report(1, 1, 1, True) == None
-    mj.mj_create_entry("e1", 1, 1, 1, "body", 3)
-    assert mj.mj_report(1, 1, 1, True) == [0, 0, 1, 0, 0, 0, 0, 0]
+def test_mj_monthly_report():
+    mjm = Mood_Journal()
+    assert mjm.mj_monthly_report(1, 1, 2025) == None
+    mjm.mj_create_entry("e1", 1, 1, 2025, "body", 3)
+    assert mjm.mj_monthly_report(1, 1, 2025) == [0, 0, 1, 0, 0, 0, 0, 0]
     print("Monthly Report Test Passed")
