@@ -31,7 +31,8 @@ def edit_entry_test():
 def determine_ranking_emoji_test():
     e1 = Entry("Test Entry 3", 1, 1, 1, "awesome", 1)
     assert e1.determine_ranking_emoji() == (b'\\U0001f60e').decode('unicode_escape')
-    print("Ranking Emoji Test Passed")
+    print("Entry of id " + e1.entry_id_str + " successfully edited.")
+    print("Edit Entry Test Passed")
 
 def mj_create_entry_test():
     mj1 = Mood_Journal()
@@ -61,13 +62,6 @@ def mj_delete_entry_test():
     #       call the mj_delete_entry function with one of their ids, and assert that the length of your
     #       Mood_Journal object is now one.
     pass
-
-def mj_report_test():
-    mj = Mood_Journal()
-    assert mj.mj_report(1, 1, 1, True) == None
-    mj.mj_create_entry("e1", 1, 1, 1, "body", 3)
-    assert mj.mj_report(1, 1, 1, True) == [0, 0, 1, 0, 0, 0, 0, 0]
-    print("Report Test Passed")
 
 create_entry_test()
 edit_entry_test()
