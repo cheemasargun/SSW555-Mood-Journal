@@ -85,6 +85,14 @@
                   {% endif %}
                 </div>
                 <p class="text-xs text-gray-500">{{ e.entry_date.isoformat() }}</p>
+                {% set bios = e.get_biometrics() if e.get_biometrics else {} %}
+                {% if bios %}
+                  <div class="mt-2 flex flex-wrap gap-2">
+                    {% for k, v in bios.items() %}
+                      <span class="text-xs bg-amber-50 text-amber-800 border border-amber-200 rounded-full px-2 py-0.5">{{ k }}: {{ v }}</span>
+                    {% endfor %}
+                  </div>
+                {% endif %}
                 {% if e.tags %}
                   <div class="mt-2 flex flex-wrap gap-2">
                     {% for t in e.tags %}
@@ -182,6 +190,24 @@
             </div>
           </div>
 
+          <!-- Biometrics (Add) -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Biometrics (optional)</label>
+            <div class="grid sm:grid-cols-2 gap-3">
+              {% for key, choices in BIOMETRICS.items() %}
+              <div>
+                <label class="text-xs text-slate-500 block mb-1">{{ key }}</label>
+                <select name="bio_{{ key }}" class="w-full rounded-xl border px-3 py-2">
+                  <option value="">—</option>
+                  {% for v in choices %}
+                    <option value="{{ v }}">{{ v|title }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
           <div>
             <label class="text-sm block mb-1">Tags (comma-separated)</label>
             <input name="tags" class="w-full rounded-xl border px-3 py-2" placeholder="work, gym, study" />
@@ -203,7 +229,7 @@
   </div>
 </div>
 
-<!-- View Entry Modal (read-only + privacy) -->
+<!-- View Entry Modal -->
 {% if view_e is defined %}
 <div id="viewModal" class="fixed inset-0 z-50 {% if not open_view_modal %}hidden{% endif %}">
   <div class="absolute inset-0 bg-black/40" onclick="closeModal('viewModal')"></div>
@@ -230,6 +256,16 @@
             <span class="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold px-2 py-0.5">🌐 Public</span>
           {% endif %}
         </div>
+
+        <!-- Biometrics (View) -->
+        {% set bios = view_e.get_biometrics() if view_e.get_biometrics else {} %}
+        {% if bios %}
+          <div class="mt-3 flex flex-wrap gap-2">
+            {% for k, v in bios.items() %}
+              <span class="text-xs bg-amber-50 text-amber-800 border border-amber-200 rounded-full px-2 py-0.5">{{ k }}: {{ v }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
 
         {% if view_e.tags %}
           <div class="mt-3 flex flex-wrap gap-2">
@@ -287,7 +323,7 @@
 {% endif %}
 {% endif %}
 
-<!-- Edit Entry Modal (separate from View) -->
+<!-- Edit Entry Modal -->
 {% if edit_e is defined %}
 <div id="editModal" class="fixed inset-0 z-50 {% if not open_edit_modal %}hidden{% endif %}">
   <div class="absolute inset-0 bg-black/40" onclick="closeModal('editModal')"></div>
@@ -343,6 +379,33 @@
             <div>
               <label class="text-sm block mb-1">Body</label>
               <textarea name="body" rows="6" class="w-full rounded-xl border px-3 py-2">{{ edit_e.entry_body }}</textarea>
+            </div>
+
+            <!-- Biometrics (Edit) -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Biometrics</label>
+              <div class="grid sm:grid-cols-2 gap-3">
+                {% set current = edit_e.get_biometrics() if edit_e.get_biometrics else {} %}
+                {% for key, choices in BIOMETRICS.items() %}
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="text-xs text-slate-500">{{ key }}</label>
+                      {% if current.get(key) %}
+                        <form method="post" action="{{ url_for('clear_biometric', entry_id=edit_e.entry_id_str, key=key) }}">
+                          <button class="text-xs text-rose-600 hover:underline" title="Clear">Clear</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                    <select name="bio_{{ key }}" class="w-full rounded-xl border px-3 py-2">
+                      <option value="">—</option>
+                      {% for v in choices %}
+                        <option value="{{ v }}" {% if current.get(key)==v %}selected{% endif %}>{{ v|title }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                {% endfor %}
+              </div>
+              <p class="text-xs text-slate-500 mt-2">Leave a field as “—” to keep it unchanged. Use “Clear” to remove an existing value.</p>
             </div>
 
             <div class="flex items-center justify-end">

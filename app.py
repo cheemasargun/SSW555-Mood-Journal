@@ -3,10 +3,12 @@ from datetime import date
 import os
 
 # Import your classes
+from mood_mastery.user import User
+# Import BIOMETRICS map from your Entry module so we can render choices
 try:
-    from mood_mastery.user import User
+    from mood_mastery.entry import BIOMETRICS
 except Exception:
-    from user import User
+    from entry import BIOMETRICS  # type: ignore
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("MOOD_DEMO_SECRET", "dev-secret")
@@ -27,7 +29,8 @@ def ranking_emoji(rank: int) -> str:
 
 @app.context_processor
 def inject_helpers():
-    return dict(ranking_emoji=ranking_emoji)
+    # expose helpers & BIOMETRICS to templates
+    return dict(ranking_emoji=ranking_emoji, BIOMETRICS=BIOMETRICS)
 
 def get_today():
     t = date.today()
@@ -67,6 +70,15 @@ def _open_edit_modal(entry_id):
         open_edit_modal=True,
     )
 
+def _parse_biometrics_form(form):
+    """Collect biometrics from form fields named bio_<Category>."""
+    data = {}
+    for key, choices in BIOMETRICS.items():
+        val = form.get(f"bio_{key}", "").strip()
+        if val and val in choices:
+            data[key] = val
+    return data
+
 # -------- Routes --------
 @app.route("/")
 def index():
@@ -83,17 +95,24 @@ def add_entry():
         tags_raw = f.get("tags", "").strip()
         tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else None
 
+        biometrics = _parse_biometrics_form(f)
+
         user.user_mood_journal.mj_log_entry(
             entry_name=title,
-            entry_day=day, entry_month=month, entry_year=year,
-            entry_body=body, ranking=ranking, tags=tags
+            entry_day=day,
+            entry_month=month,
+            entry_year=year,
+            entry_body=body,
+            ranking=ranking,
+            tags=tags,
+            biometrics=biometrics,  # <- fixed: no duplicate 'tags' kwarg
         )
         flash("Entry created!", "success")
     except Exception as ex:
         flash(f"Failed to create entry: {ex}", "error")
     return redirect(url_for("index"))
 
-# optional mirror if an old template posts to /mood-journal
+# Optional mirror if something posts to /mood-journal
 @app.route("/mood-journal", methods=["POST"])
 def add_entry_mirror():
     return add_entry()
@@ -140,7 +159,6 @@ def make_private(entry_id):
         ok = user.privatize_entry(entry_id_str=entry_id)
 
     flash("Entry set to private." if ok else "Could not set privacy.", "success" if ok else "error")
-    # After making private, body will be hidden until unlocked
     return _open_view_modal(entry_id, body=None, ask_password=True if ok else False)
 
 @app.route("/delete/<entry_id>", methods=["POST"])
@@ -185,6 +203,12 @@ def edit_entry_save(entry_id):
             new_body=new_body,
             new_ranking=new_rank
         )
+
+        # Biometrics update (only fields the user chose)
+        bio_updates = _parse_biometrics_form(f)
+        for k, v in bio_updates.items():
+            e.set_biometric(k, v)
+
         flash("Entry updated.", "success")
     except Exception as ex:
         flash(f"Failed to update entry: {ex}", "error")
@@ -228,6 +252,26 @@ def clear_tags(entry_id):
         return redirect(url_for("index"))
     e.clear_tags()
     flash("All tags cleared.", "success")
+    return _open_edit_modal(entry_id)
+
+# ---- BIOMETRICS (edit feature) ----
+@app.route("/entry/<entry_id>/biometrics/clear/<key>", methods=["POST"])
+def clear_biometric(entry_id, key):
+    e = user.user_mood_journal.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+    try:
+        from mood_mastery.entry import BIOMETRICS as _BIO
+    except Exception:
+        try:
+            from entry import BIOMETRICS as _BIO  # type: ignore
+        except Exception:
+            _BIO = BIOMETRICS
+    if key in _BIO and e.delete_biometric(key):
+        flash(f"Cleared “{key}”.", "success")
+    else:
+        flash("Nothing to clear.", "error")
     return _open_edit_modal(entry_id)
 
 if __name__ == "__main__":
