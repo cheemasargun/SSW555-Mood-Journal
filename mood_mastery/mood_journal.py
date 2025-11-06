@@ -32,6 +32,11 @@ from datetime import datetime, date, timedelta
 from mood_mastery.entry import Entry
 from typing import Optional
 
+try:
+    from extensions import db
+except Exception:
+    db = None
+
 class Mood_Journal:
     # Attributes (TO BE UPDATED) (if we need attributes here, really)
     entries_dict = {}
