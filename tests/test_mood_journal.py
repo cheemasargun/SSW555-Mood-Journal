@@ -5,7 +5,7 @@
 from mood_mastery.entry import Entry
 from mood_mastery.mood_journal import Mood_Journal
 from mood_mastery.user import User
-from datetime import date
+from datetime import date, datetime
 import pytest
 
 """Create Entry Test"""
