@@ -323,3 +323,49 @@ class Mood_Journal:
         # End on Sunday to close the grid
         end = last + timedelta(days=(6 - last.weekday()))
         return self.mj_entries_grouped_by_day(start, end)
+
+    def mj_mood_rating_graph(self, type_of_graph: str, start_date: date, end_date: date):
+        """
+        Returns a dictionary representing the mood_rating information from start_date to end_date for either a:
+            - Line graph showing all mood_ratings across the period of time
+                Graph details: (x axis = dates from start_date to end_date, y axis = ratings from 1 to 100)
+                Dictionary format: { start_date (date) : start_date_mood_ratings_avg (int), ..., end_date (date) : end_date_mood_ratings_avg (int) }
+            or
+            - Bar graph showing frequency of different mood_ratings during the period of time
+                Graph details: (x axis = ratings from 1 to 100, y axis = amount of times the rating occurred during the period of time)
+                Dictionary format: { 1 : amount_of_1s (int), ..., 100 : amount_of_100s (int) } 
+
+        Parameters -------------------------
+        - type_of_graph : str       // The type of graph the user wishes to see
+        - start_date : date         // The beginning of the time period the user wants to see their mood_ratings for
+        - end_date : date           // The ending of the time period the user wants to see their mood_ratings for
+        """
+        entries_grouped_by_day = self.mj_entries_grouped_by_day(start_date, end_date)
+        
+        rating_graph_info = {}
+        
+        if type_of_graph == "line":
+            for curr_day, list_of_entries in entries_grouped_by_day.items():
+                # Setting mood_ratings_avg to 0 (an invalid mood_rating value) by default; indicates no entries for the day
+                mood_ratings_avg = 0
+
+                if len(list_of_entries) >= 1:
+                    # Getting average of mood_ratings if there's at least 1 entry for the day
+                    for curr_entry in list_of_entries:
+                        mood_ratings_avg += curr_entry.mood_rating
+                    mood_ratings_avg = mood_ratings_avg / len(list_of_entries)
+                
+                rating_graph_info[curr_day] = mood_ratings_avg
+
+        elif type_of_graph == "bar":
+            # Initializing rating_graph_info to have a count for each rating (1 to 100)
+            for i in range(1,101):
+                rating_graph_info[i] = 0
+            
+            # Iterating through every day's entries, and incrementing the count for each encountered mood_rating accordingly
+            for curr_day, list_of_entries in entries_grouped_by_day.items():
+                for curr_entry in list_of_entries:
+                    curr_rating = curr_entry.mood_rating
+                    rating_graph_info[curr_rating] = rating_graph_info[curr_rating] + 1
+        
+        return rating_graph_info
