@@ -1,3 +1,5 @@
+from datetime import date, datetime, timedelta
+
 from flask import (
     Flask,
     render_template,
@@ -7,74 +9,79 @@ from flask import (
     flash,
     session,
 )
-from datetime import date, datetime, timedelta
 
-# Your domain logic
 from mood_mastery.mood_journal import Mood_Journal
 from mood_mastery.entry import BIOMETRICS, Entry
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "dev-key"  # or use env var in real life
+app.config["SECRET_KEY"] = "dev-key"  # TODO: replace with env var in real deployment
 
 # In-memory journal instance
 mj = Mood_Journal()
 
-# ---------------------------------
-# Theme configuration
-# ---------------------------------
+# ----------------- THEME CONFIG -----------------
 
 THEME_CHOICES = {
     "indigo": {
         "label": "Indigo",
-        "accent": "79 70 229",       # rgb(79, 70, 229)
-        "accent_soft": "165 180 252" # rgb(165, 180, 252)
+        "accent": "79 70 229",
+        "accent_soft": "165 180 252",
+        "bg": "15 23 42",
+        "bg_soft": "30 41 59",
+        "card": "15 23 42",
     },
     "emerald": {
         "label": "Emerald",
-        "accent": "16 185 129",      # rgb(16, 185, 129)
-        "accent_soft": "167 243 208" # rgb(167, 243, 208)
+        "accent": "16 185 129",
+        "accent_soft": "167 243 208",
+        "bg": "6 78 59",
+        "bg_soft": "5 46 40",
+        "card": "6 95 70",
     },
     "rose": {
         "label": "Rose",
-        "accent": "244 63 94",       # rgb(244, 63, 94)
-        "accent_soft": "254 202 202" # rgb(254, 202, 202)
+        "accent": "244 63 94",
+        "accent_soft": "254 202 202",
+        "bg": "76 29 49",
+        "bg_soft": "88 28 45",
+        "card": "136 19 55",
     },
     "amber": {
         "label": "Amber",
-        "accent": "245 158 11",      # rgb(245, 158, 11)
-        "accent_soft": "253 230 138" # rgb(253, 230, 138)
+        "accent": "245 158 11",
+        "accent_soft": "253 230 138",
+        "bg": "113 63 18",
+        "bg_soft": "120 53 15",
+        "card": "146 64 14",
     },
 }
+
+DEFAULT_THEME_KEY = "indigo"
+THEME_SESSION_KEY = "mj_theme"
 
 
 @app.context_processor
 def inject_theme():
-    """Make theme info available to all templates."""
-    theme_name = session.get("theme", "indigo")
-    if theme_name not in THEME_CHOICES:
-        theme_name = "indigo"
-    theme = THEME_CHOICES[theme_name]
+    theme_key = session.get(THEME_SESSION_KEY, DEFAULT_THEME_KEY)
+    theme = THEME_CHOICES.get(theme_key, THEME_CHOICES[DEFAULT_THEME_KEY])
     return {
-        "current_theme_name": theme_name,
         "current_theme": theme,
+        "current_theme_key": theme_key,
         "theme_choices": THEME_CHOICES,
     }
 
 
 @app.post("/theme")
 def set_theme():
-    """Change the current UI theme and redirect back."""
-    theme = request.form.get("theme", "indigo")
-    if theme not in THEME_CHOICES:
-        theme = "indigo"
-    session["theme"] = theme
-    # Go back where we came from, or home as fallback
+    key = request.form.get("theme", DEFAULT_THEME_KEY)
+    if key not in THEME_CHOICES:
+        key = DEFAULT_THEME_KEY
+    session[THEME_SESSION_KEY] = key
     return redirect(request.referrer or url_for("index"))
 
 
-# ---------------------------------
-# Jinja helpers
-# ---------------------------------
+# ----------------- JINJA HELPERS -----------------
+
 
 def ranking_emoji(r: int) -> str:
     """
@@ -88,7 +95,7 @@ def ranking_emoji(r: int) -> str:
 app.jinja_env.globals["ranking_emoji"] = ranking_emoji
 app.jinja_env.globals["BIOMETRICS"] = BIOMETRICS
 
-# Simple global password for all private entries (demo only)
+# Simple global password for demo
 ENTRY_PASSWORD: str | None = None
 
 
@@ -104,8 +111,13 @@ def _streak_summary_for_ui():
 
 def _sorted_entries():
     entries = mj.mj_get_all_entries()
-    # newest first
-    entries.sort(key=lambda e: (e.entry_date, getattr(e, "entry_id_str", "")), reverse=True)
+    entries.sort(
+        key=lambda e: (
+            e.entry_date,
+            getattr(e, "entry_id_str", ""),
+        ),
+        reverse=True,
+    )
     return entries
 
 
@@ -138,6 +150,7 @@ def _build_report_dict(title: str, counts: list[int], start: date, end: date) ->
 # Routes
 # =========================================================
 
+
 @app.route("/")
 def index():
     entries = _sorted_entries()
@@ -157,6 +170,7 @@ def index():
 
 # ---------- CRUD for entries ----------
 
+
 @app.post("/entries/add")
 def add_entry():
     title = request.form.get("title", "").strip()
@@ -166,7 +180,6 @@ def add_entry():
     body = request.form.get("body", "")
     ranking = int(request.form.get("ranking", "5"))
 
-    # Mood rating (1–100), default 50 if not provided
     mood_rating_raw = request.form.get("mood_rating", "").strip()
     try:
         mood_rating = int(mood_rating_raw)
@@ -211,7 +224,6 @@ def view_entry(entry_id):
     today = date.today()
     summary = _streak_summary_for_ui()
 
-    # By default: if not private, show body; if private, ask password
     view_body = None
     view_ask_password = False
     if not e.is_private_check():
@@ -247,7 +259,6 @@ def unlock_entry(entry_id):
         flash("Incorrect password.", "error")
         return redirect(url_for("view_entry", entry_id=entry_id))
 
-    # Correct password: show the body
     entries = _sorted_entries()
     today = date.today()
     summary = _streak_summary_for_ui()
@@ -337,6 +348,7 @@ def delete_entry(entry_id):
 
 # ---------- Privacy ----------
 
+
 @app.post("/entries/<entry_id>/make-private")
 def make_private(entry_id):
     global ENTRY_PASSWORD
@@ -358,6 +370,7 @@ def make_private(entry_id):
 
 
 # ---------- Tags ----------
+
 
 @app.post("/entries/<entry_id>/tags/add")
 def add_tag(entry_id):
@@ -403,6 +416,7 @@ def clear_tags(entry_id):
 
 # ---------- Biometrics ----------
 
+
 @app.post("/entries/<entry_id>/biometric/clear/<key>")
 def clear_biometric(entry_id, key):
     e = mj.mj_get_entry(entry_id)
@@ -416,6 +430,7 @@ def clear_biometric(entry_id, key):
 
 
 # ---------- Reports (weekly / monthly) ----------
+
 
 @app.get("/report/weekly")
 def weekly_report():
@@ -471,9 +486,12 @@ def monthly_report():
 
 # ---------- Calendar + Mood Graph ----------
 
+
 @app.get("/calendar")
 def calendar_view():
-    """Basic timeline/calendar: show entries grouped by date for the current month."""
+    """
+    Show one full month containing 'today', grouped by date.
+    """
     today = date.today()
     cal = mj.mj_month_calendar(today.year, today.month)
     entries = _sorted_entries()
@@ -495,26 +513,25 @@ def calendar_view():
 @app.get("/mood-graph")
 def mood_graph():
     """
-    Mood rating graph:
-    - mode=line : average mood per day (last 14 days)
-    - mode=bar  : rating frequency histogram (1–100) over last 14 days
+    Mood rating graph (line or bar) for the last 14 days.
     """
-    today = date.today()
-    start = today - timedelta(days=13)
     mode = request.args.get("mode", "line")
     if mode not in ("line", "bar"):
         mode = "line"
 
-    if mode == "bar":
-        graph_dict = mj.mj_mood_rating_graph("bar", start, today)
-        labels = list(range(1, 101))
-        values = [graph_dict.get(i, 0) for i in labels]
+    today = date.today()
+    start = today - timedelta(days=13)
+    data_dict = mj.mj_mood_rating_graph(mode, start, today)
+
+    if mode == "line":
+        # keys are date objects
+        days_sorted = sorted(data_dict.keys())
+        labels = [d.isoformat() for d in days_sorted]
+        values = [data_dict[d] for d in days_sorted]
     else:
-        graph_dict = mj.mj_mood_rating_graph("line", start, today)
-        # keys are dates; keep them ordered
-        ordered_items = sorted(graph_dict.items(), key=lambda kv: kv[0])
-        labels = [d.isoformat() for d, _ in ordered_items]
-        values = [v for _, v in ordered_items]
+        # bar: keys are 1..100 (ratings), but we don't assume they're all present
+        labels = list(range(1, 101))
+        values = [data_dict.get(i, 0) for i in labels]
 
     entries = _sorted_entries()
     summary = _streak_summary_for_ui()

@@ -1,122 +1,198 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>{% block title %}Mood Journal{% endblock %}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{% block title %}Mood Journal – Demo{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Tailwind CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      /* From app.py via context_processor */
+      --mj-accent: {{ current_theme.accent }};
+      --mj-accent-soft: {{ current_theme.accent_soft }};
+      --mj-bg: {{ current_theme.bg }};
+      --mj-bg-soft: {{ current_theme.bg_soft }};
+      --mj-card: {{ current_theme.card }};
+    }
 
-    <!-- Theme CSS variables -->
-    <style>
-      :root {
-        /* These come from app.py via context_processor */
-        --mj-accent: {{ current_theme.accent }};
-        --mj-accent-soft: {{ current_theme.accent_soft }};
-      }
+    body {
+      background-color: rgb(var(--mj-bg));
+      color: #e5e7eb; /* slate-200 */
+    }
 
-      /* Simple fade for modals */
-      .modal-enter {
-        opacity: 0;
-        transform: scale(0.98);
-      }
-      .modal-enter-active {
-        opacity: 1;
-        transform: scale(1);
-        transition: all 150ms ease-out;
-      }
-    </style>
+    .mj-shell {
+      background:
+        radial-gradient(circle at top left,
+          rgba(var(--mj-accent-soft), 0.2),
+          transparent 55%);
+      min-height: 100vh;
+    }
 
-    {% block extra_head %}{% endblock %}
-  </head>
-  <body class="bg-slate-100 min-h-screen">
+    .mj-card {
+      background-color: rgb(var(--mj-card));
+      border-color: rgba(15, 23, 42, 0.9);
+    }
+
+    .mj-card-soft {
+      background-color: rgb(var(--mj-bg-soft));
+      border-color: rgba(15, 23, 42, 0.6);
+    }
+
+    .mj-accent-badge {
+      background-color: rgba(var(--mj-accent-soft), 0.5);
+      color: #020617;
+    }
+
+    .mj-accent-pill {
+      background-color: rgba(var(--mj-accent), 0.15);
+      color: #e5e7eb;
+    }
+
+    .mj-accent-btn {
+      background-color: rgb(var(--mj-accent));
+      color: #f9fafb;
+    }
+
+    .mj-accent-btn:hover {
+      background-color: rgba(var(--mj-accent), 0.9);
+    }
+
+    .mj-accent-border {
+      border-color: rgba(var(--mj-accent-soft), 0.9);
+    }
+
+    @keyframes float {
+      0% { transform: translateY(0) rotate(0); }
+      50% { transform: translateY(-10px) rotate(4deg); }
+      100% { transform: translateY(0) rotate(0); }
+    }
+    .float-animation {
+      animation: float 4s ease-in-out infinite;
+    }
+    button,
+  a {
+    transition:
+      background-color 0.18s ease,
+      color 0.18s ease,
+      border-color 0.18s ease,
+      transform 0.18s ease;
+  }
+
+  button:hover,
+  a.mj-accent-btn:hover {
+    transform: translateY(-0.5px);
+  }
+
+  .mj-accent-btn {
+    background-color: rgb(var(--mj-accent));
+    color: #f9fafb;
+  }
+
+  .mj-accent-btn:hover {
+    background-color: rgb(var(--mj-accent)); 
+    filter: brightness(1.03);                
+  }
+  </style>
+
+  <script>
+    function openModal(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('hidden');
+    }
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.add('hidden');
+    }
+  </script>
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="mj-shell">
     <div class="min-h-screen flex flex-col">
-      <!-- Top bar / header -->
-      <header class="border-b bg-white/80 backdrop-blur">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
-          <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-lg flex items-center justify-center
-                        bg-[rgb(var(--mj-accent))] text-white text-lg font-bold">
+      <!-- Header -->
+      <header class="border-b border-slate-800/70 bg-slate-900/70 backdrop-blur">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center mj-accent-btn text-white text-lg font-bold shadow">
               MJ
             </div>
-            <div class="hidden sm:block">
-              <p class="text-sm font-semibold text-slate-900">Mood Mastery</p>
-              <p class="text-xs text-slate-500">Track. Reflect. Improve.</p>
+            <div>
+              <a href="{{ url_for('index') }}" class="text-sm font-semibold text-slate-50">
+                Mood Journal — Demo
+              </a>
+              <p class="text-[11px] text-slate-400">
+                Track your moods, tags, and trends over time.
+              </p>
             </div>
           </div>
 
-          <!-- Theme picker -->
-          <div class="flex items-center gap-3">
-            <form method="post" action="{{ url_for('set_theme') }}" class="flex items-center gap-1 text-xs sm:text-sm">
-              <label for="theme" class="text-slate-500 mr-1 hidden sm:inline">Theme:</label>
-              <select name="theme" id="theme"
-                      class="rounded-lg border border-slate-200 px-2 py-1 text-xs sm:text-sm bg-white"
-                      onchange="this.form.submit()">
-                {% for key, meta in theme_choices.items() %}
-                  <option value="{{ key }}" {% if key == current_theme_name %}selected{% endif %}>
-                    {{ meta.label }}
+          <div class="flex items-center gap-4">
+            <nav class="flex items-center gap-2 text-xs sm:text-sm">
+              <a href="{{ url_for('index') }}"
+                 class="px-2 py-1 rounded-lg border border-slate-700 text-slate-200 hover:text-white hover:border-slate-500">
+                Dashboard
+              </a>
+              <a href="{{ url_for('calendar_view') }}"
+                 class="px-2 py-1 rounded-lg border border-slate-700 text-slate-200 hover:text-white hover:border-slate-500">
+                Calendar
+              </a>
+              <a href="{{ url_for('mood_graph', mode='line') }}"
+                 class="px-2 py-1 rounded-lg border border-slate-700 text-slate-200 hover:text-white hover:border-slate-500">
+                Mood Graph
+              </a>
+            </nav>
+
+            <!-- Theme picker -->
+            <form method="post" action="{{ url_for('set_theme') }}"
+                  class="flex items-center gap-2 text-xs">
+              <label for="theme" class="text-slate-400 hidden sm:inline">Theme</label>
+              <select id="theme" name="theme"
+                      class="bg-slate-900/70 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100">
+                {% for key, t in theme_choices.items() %}
+                  <option value="{{ key }}" {% if key == current_theme_key %}selected{% endif %}>
+                    {{ t.label }}
                   </option>
                 {% endfor %}
               </select>
-              <!-- CSRF isn't set up, so no token here; fine for class project/demo -->
+              <button class="mj-accent-btn px-2 py-1 rounded-lg text-[11px]" type="submit">
+                Apply
+              </button>
             </form>
           </div>
         </div>
       </header>
 
-      <!-- Main content -->
-      <main class="flex-1">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <!-- Flash messages -->
-          {% with messages = get_flashed_messages(with_categories=True) %}
-          {% if messages %}
-            <div class="space-y-2 mb-4">
-              {% for category, message in messages %}
-                {% set bg = 'bg-blue-50 text-blue-800 border-blue-200' %}
-                {% if category == 'error' %}
-                  {% set bg = 'bg-rose-50 text-rose-800 border-rose-200' %}
-                {% elif category == 'success' %}
-                  {% set bg = 'bg-emerald-50 text-emerald-800 border-emerald-200' %}
-                {% endif %}
-                <div class="border {{ bg }} rounded-lg px-3 py-2 text-sm flex items-start gap-2">
-                  <span class="mt-0.5">●</span>
-                  <span>{{ message }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
-          {% endwith %}
+      <!-- Flash messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="max-w-6xl mx-auto px-4 mt-4 space-y-2">
+            {% for category, msg in messages %}
+              <div class="rounded-lg px-4 py-3 text-xs sm:text-sm border
+                          {% if category == 'success' %}
+                            bg-emerald-900/40 text-emerald-100 border-emerald-500/60
+                          {% else %}
+                            bg-rose-900/40 text-rose-100 border-rose-500/60
+                          {% endif %}">
+                {{ msg|safe }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
 
-          {% block content %}{% endblock %}
-        </div>
+      <!-- Main content -->
+      <main class="flex-1 max-w-6xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
       </main>
 
-      <footer class="border-t bg-white">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 text-xs text-slate-400 flex justify-between">
-          <span>Mood Journal Demo</span>
-          <span>Theme: {{ current_theme.label }}</span>
-        </div>
-      </footer>
+      {% block modals %}{% endblock %}
+
+      {% block extra_scripts %}{% endblock %}
     </div>
-
-    <!-- Modals from pages -->
-    {% block modals %}{% endblock %}
-
-    <!-- Shared JS helpers -->
-    <script>
-      function openModal(id) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.classList.remove('hidden');
-      }
-      function closeModal(id) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.classList.add('hidden');
-      }
-    </script>
-
-    {% block extra_scripts %}{% endblock %}
-  </body>
+  </div>
+</body>
 </html>
