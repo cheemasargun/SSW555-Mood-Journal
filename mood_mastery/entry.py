@@ -121,7 +121,7 @@ class Entry:
         Returns string with ranking's associated emoji
         """
         toReturn = ""
-        match self.ranking:
+        match self.ranking:    
             case 1:
                 toReturn = b'\\U0001f60e' # sunglasses
             case 2:
@@ -137,7 +137,7 @@ class Entry:
             case 7:
                 toReturn = b'\\U0001fae0' # melting
             case 8:
-                toReturn = b'\\U0001fae9' # tired
+                toReturn = b'\\U0001fae9' # tired 
         return toReturn.decode('unicode_escape')
 
     #Tagging System
