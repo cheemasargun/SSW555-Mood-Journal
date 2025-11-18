@@ -121,23 +121,23 @@ class Entry:
         Returns string with ranking's associated emoji
         """
         toReturn = ""
-        match self.ranking:
+        match self.ranking:    
             case 1:
-                toReturn = b'\\U0001f60e' # sunglasses
+                toReturn = b'\\U0001F62D'  # 😭 
             case 2:
-                toReturn = b'\\U0001f621' # angry
+                toReturn = b'\\U0001F629'  # 😩 
             case 3:
-                toReturn = b'\\U0001f628' # fear
+                toReturn = b'\\U0001F628'  # 😨 
             case 4:
-                toReturn = b'\\U0001f62d' # crying
+                toReturn = b'\\U0001F621'  # 😡  
             case 5:
-                toReturn = b'\\U0001f63c' # cat smirk
+                toReturn = b'\\U0001F641'  # 🙁 
             case 6:
-                toReturn = b'\\U0001f922' # sick
+                toReturn = b'\\U0001F610'  # 😐
             case 7:
-                toReturn = b'\\U0001fae0' # melting
+                toReturn = b'\\U0001F642'  # 🙂 
             case 8:
-                toReturn = b'\\U0001fae9' # tired
+                toReturn = b'\\U0001F603'  # 😃 
         return toReturn.decode('unicode_escape')
 
     #Tagging System

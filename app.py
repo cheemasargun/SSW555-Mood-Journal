@@ -1,322 +1,537 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
-from datetime import date,timedelta
-import os
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    session,
+)
+from datetime import date, datetime, timedelta
 
-# Import your classes
-from mood_mastery.user import User
-# Import BIOMETRICS map from your Entry module so we can render choices
-try:
-    from mood_mastery.entry import BIOMETRICS
-except Exception:
-    from entry import BIOMETRICS  # type: ignore
+# Your domain logic
+from mood_mastery.mood_journal import Mood_Journal
+from mood_mastery.entry import BIOMETRICS, Entry
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("MOOD_DEMO_SECRET", "dev-secret")
+app.config["SECRET_KEY"] = "dev-key"  # or use env var in real life
 
-# Single demo user (in-memory)
-user = User()
+# In-memory journal instance
+mj = Mood_Journal()
 
-# -------- Helpers --------
-def ranking_emoji(rank: int) -> str:
-    mapping = {
-        1: "😵", 2: "😖", 3: "🙁", 4: "😢",
-        5: "😡", 6: "😐", 7: "🙂", 8: "😄",
-    }
-    try:
-        return mapping.get(int(rank), "🙂")
-    except Exception:
-        return "🙂"
+# ---------------------------------
+# Theme configuration
+# ---------------------------------
+
+THEME_CHOICES = {
+    "indigo": {
+        "label": "Indigo",
+        "accent": "79 70 229",       # rgb(79, 70, 229)
+        "accent_soft": "165 180 252" # rgb(165, 180, 252)
+    },
+    "emerald": {
+        "label": "Emerald",
+        "accent": "16 185 129",      # rgb(16, 185, 129)
+        "accent_soft": "167 243 208" # rgb(167, 243, 208)
+    },
+    "rose": {
+        "label": "Rose",
+        "accent": "244 63 94",       # rgb(244, 63, 94)
+        "accent_soft": "254 202 202" # rgb(254, 202, 202)
+    },
+    "amber": {
+        "label": "Amber",
+        "accent": "245 158 11",      # rgb(245, 158, 11)
+        "accent_soft": "253 230 138" # rgb(253, 230, 138)
+    },
+}
+
 
 @app.context_processor
-def inject_helpers():
-    # expose helpers & BIOMETRICS to templates
-    return dict(ranking_emoji=ranking_emoji, BIOMETRICS=BIOMETRICS)
+def inject_theme():
+    """Make theme info available to all templates."""
+    theme_name = session.get("theme", "indigo")
+    if theme_name not in THEME_CHOICES:
+        theme_name = "indigo"
+    theme = THEME_CHOICES[theme_name]
+    return {
+        "current_theme_name": theme_name,
+        "current_theme": theme,
+        "theme_choices": THEME_CHOICES,
+    }
 
-def get_today():
-    t = date.today()
-    return {"year": t.year, "month": t.month, "day": t.day}
 
-def _render_index(**extra):
-    entries = user.user_mood_journal.mj_get_all_entries()
-    entries.sort(key=lambda e: (e.entry_date, e.entry_name), reverse=True)
-    s = user.user_mood_journal.get_streak_summary()
-    summary = {
+@app.post("/theme")
+def set_theme():
+    """Change the current UI theme and redirect back."""
+    theme = request.form.get("theme", "indigo")
+    if theme not in THEME_CHOICES:
+        theme = "indigo"
+    session["theme"] = theme
+    # Go back where we came from, or home as fallback
+    return redirect(request.referrer or url_for("index"))
+
+
+# ---------------------------------
+# Jinja helpers
+# ---------------------------------
+
+def ranking_emoji(r: int) -> str:
+    """
+    Convenience wrapper so templates can call ranking_emoji(r).
+    Uses Entry.determine_ranking_emoji internally.
+    """
+    tmp = Entry("tmp", 1, 1, 2000, "", r, 50)
+    return tmp.determine_ranking_emoji()
+
+
+app.jinja_env.globals["ranking_emoji"] = ranking_emoji
+app.jinja_env.globals["BIOMETRICS"] = BIOMETRICS
+
+# Simple global password for all private entries (demo only)
+ENTRY_PASSWORD: str | None = None
+
+
+def _streak_summary_for_ui():
+    s = mj.get_streak_summary()
+    last = s["last_entry_date"]
+    return {
         "current": s["current_streak"],
         "longest": s["longest_streak"],
-        "last": s["last_entry_date"].isoformat() if s["last_entry_date"] else None,
+        "last": last.isoformat() if last else None,
     }
-    base_ctx = dict(
-        entries=entries,
-        summary=summary,
-        today=get_today(),
-        password_set=(user.user_entries_pwd_encrypted is not None),
-    )
-    base_ctx.update(extra)
-    return render_template("apps/mood_journal/index.html", **base_ctx)
 
-def _open_view_modal(entry_id, body=None, ask_password=False):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    return _render_index(
-        view_e=e,
-        view_body=body,
-        view_ask_password=ask_password,
-        open_view_modal=True,
-    )
 
-def _open_edit_modal(entry_id):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    return _render_index(
-        edit_e=e,
-        open_edit_modal=True,
-    )
+def _sorted_entries():
+    entries = mj.mj_get_all_entries()
+    # newest first
+    entries.sort(key=lambda e: (e.entry_date, getattr(e, "entry_id_str", "")), reverse=True)
+    return entries
 
-def _parse_biometrics_form(form):
-    """Collect biometrics from form fields named bio_<Category>."""
-    data = {}
-    for key, choices in BIOMETRICS.items():
-        val = form.get(f"bio_{key}", "").strip()
-        if val and val in choices:
-            data[key] = val
-    return data
 
-# -------- Routes --------
-@app.route("/")
-def index():
-    return _render_index()
-
-@app.route("/add", methods=["POST"])
-def add_entry():
-    f = request.form
-    try:
-        title = f.get("title", "Untitled").strip()
-        year = int(f.get("year")); month = int(f.get("month")); day = int(f.get("day"))
-        ranking = int(f.get("ranking", 5))
-        body = f.get("body", "").strip()
-        tags_raw = f.get("tags", "").strip()
-        tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else None
-
-        biometrics = _parse_biometrics_form(f)
-
-        user.user_mood_journal.mj_log_entry(
-            entry_name=title,
-            entry_day=day,
-            entry_month=month,
-            entry_year=year,
-            entry_body=body,
-            ranking=ranking,
-            tags=tags,
-            biometrics=biometrics,  # <- fixed: no duplicate 'tags' kwarg
-        )
-        flash("Entry created!", "success")
-    except Exception as ex:
-        flash(f"Failed to create entry: {ex}", "error")
-    return redirect(url_for("index"))
-
-# Optional mirror if something posts to /mood-journal
-@app.route("/mood-journal", methods=["POST"])
-def add_entry_mirror():
-    return add_entry()
-
-# ---- VIEW (separate) ----
-@app.route("/entry/<entry_id>")
-def view_entry(entry_id):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    if not e:
-        flash("Entry not found.", "error")
-        return redirect(url_for("index"))
-    obj = user.view_entry(entry_id)  # Entry or False (if private)
-    body = obj.entry_body if obj and hasattr(obj, "entry_body") else None
-    ask_password = (body is None) and e.is_private_check()
-    return _open_view_modal(entry_id, body=body, ask_password=ask_password)
-
-@app.route("/entry/<entry_id>/unlock", methods=["POST"])
-def unlock_entry(entry_id):
-    pwd = request.form.get("password", "")
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    if not e:
-        flash("Entry not found.", "error")
-        return redirect(url_for("index"))
-    obj = user.view_entry(entry_id, entry_pwd_attempt=pwd)
-    if obj is False:
-        flash("Incorrect password.", "error")
-        return _open_view_modal(entry_id, body=None, ask_password=True)
-    return _open_view_modal(entry_id, body=obj.entry_body, ask_password=False)
-
-@app.route("/privacy/<entry_id>", methods=["POST"])
-def make_private(entry_id):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    if not e:
-        flash("Entry not found.", "error")
-        return redirect(url_for("index"))
-
-    if user.user_entries_pwd_encrypted is None:
-        pwd = request.form.get("password")
-        if not pwd:
-            flash("Create a password to enable privacy.", "error")
-            return _open_view_modal(entry_id, body=None, ask_password=True)
-        ok = user.privatize_entry(entry_id_str=entry_id, user_entries_pwd=pwd)
-    else:
-        ok = user.privatize_entry(entry_id_str=entry_id)
-
-    flash("Entry set to private." if ok else "Could not set privacy.", "success" if ok else "error")
-    return _open_view_modal(entry_id, body=None, ask_password=True if ok else False)
-
-@app.route("/delete/<entry_id>", methods=["POST"])
-def delete_entry(entry_id):
-    if user.user_mood_journal.mj_delete_entry(entry_id):
-        flash("Entry deleted.", "success")
-    else:
-        flash("Could not delete entry.", "error")
-    return redirect(url_for("index"))
-
-# ---- EDIT (separate) ----
-@app.route("/entry/<entry_id>/edit")
-def edit_entry_open(entry_id):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    if not e:
-        flash("Entry not found.", "error")
-        return redirect(url_for("index"))
-    return _open_edit_modal(entry_id)
-
-@app.route("/entry/<entry_id>/edit", methods=["POST"])
-def edit_entry_save(entry_id):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    if not e:
-        flash("Entry not found.", "error")
-        return redirect(url_for("index"))
-
-    f = request.form
-    try:
-        new_title = f.get("title", e.entry_name).strip() or e.entry_name
-        new_year = int(f.get("year", e.entry_date.year))
-        new_month = int(f.get("month", e.entry_date.month))
-        new_day = int(f.get("day", e.entry_date.day))
-        new_body = f.get("body", e.entry_body)
-        new_rank = int(f.get("ranking", e.ranking))
-
-        user.user_mood_journal.mj_edit_entry(
-            entry_id_str=entry_id,
-            new_name=new_title,
-            new_day=new_day,
-            new_month=new_month,
-            new_year=new_year,
-            new_body=new_body,
-            new_ranking=new_rank
-        )
-
-        # Biometrics update (only fields the user chose)
-        bio_updates = _parse_biometrics_form(f)
-        for k, v in bio_updates.items():
-            e.set_biometric(k, v)
-
-        flash("Entry updated.", "success")
-    except Exception as ex:
-        flash(f"Failed to update entry: {ex}", "error")
-
-    return _open_edit_modal(entry_id)
-
-# ---- TAGS (on the Edit feature) ----
-@app.route("/entry/<entry_id>/tags/add", methods=["POST"])
-def add_tag(entry_id):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    if not e:
-        flash("Entry not found.", "error")
-        return redirect(url_for("index"))
-    tag = (request.form.get("tag") or "").strip()
-    if not tag:
-        flash("Tag cannot be empty.", "error")
-    elif e.add_tag(tag):
-        flash(f"Tag “{tag}” added.", "success")
-    else:
-        flash(f"Tag “{tag}” already exists or invalid.", "error")
-    return _open_edit_modal(entry_id)
-
-@app.route("/entry/<entry_id>/tags/delete", methods=["POST"])
-def delete_tag(entry_id):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    if not e:
-        flash("Entry not found.", "error")
-        return redirect(url_for("index"))
-    tag = (request.form.get("tag") or "").strip()
-    if e.remove_tag(tag):
-        flash(f"Tag “{tag}” removed.", "success")
-    else:
-        flash(f"Tag “{tag}” not found.", "error")
-    return _open_edit_modal(entry_id)
-
-@app.route("/entry/<entry_id>/tags/clear", methods=["POST"])
-def clear_tags(entry_id):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    if not e:
-        flash("Entry not found.", "error")
-        return redirect(url_for("index"))
-    e.clear_tags()
-    flash("All tags cleared.", "success")
-    return _open_edit_modal(entry_id)
-
-# ---- BIOMETRICS (edit feature) ----
-@app.route("/entry/<entry_id>/biometrics/clear/<key>", methods=["POST"])
-def clear_biometric(entry_id, key):
-    e = user.user_mood_journal.mj_get_entry(entry_id)
-    if not e:
-        flash("Entry not found.", "error")
-        return redirect(url_for("index"))
-    try:
-        from mood_mastery.entry import BIOMETRICS as _BIO
-    except Exception:
-        try:
-            from entry import BIOMETRICS as _BIO  # type: ignore
-        except Exception:
-            _BIO = BIOMETRICS
-    if key in _BIO and e.delete_biometric(key):
-        flash(f"Cleared “{key}”.", "success")
-    else:
-        flash("Nothing to clear.", "error")
-    return _open_edit_modal(entry_id)
-
-def _build_report(kind: str):
-    """
-    kind: 'weekly' or 'monthly'
-    Returns payload for the modal: {title, counts, total, start, end, bars}
-    """
-    today = date.today()
-    if kind == "weekly":
-        counts = user.user_mood_journal.mj_weekly_report(today.day, today.month, today.year) or [0]*8
-        days = 7
-        title = "Weekly Report"
-    else:
-        counts = user.user_mood_journal.mj_monthly_report(today.day, today.month, today.year) or [0]*8
-        days = 30
-        title = "Monthly Report"
-
-    start = (today - timedelta(days=days-1))
+def _build_report_dict(title: str, counts: list[int], start: date, end: date) -> dict:
     total = sum(counts)
-    maxc = max(counts) if counts else 0
-
     bars = []
-    for i, c in enumerate(counts):
-        rank = i + 1
-        pct = int((c / maxc) * 100) if maxc > 0 else 0
-        bars.append({"rank": rank, "emoji": ranking_emoji(rank), "count": c, "pct": pct})
-
+    if total > 0:
+        for idx, count in enumerate(counts, start=1):
+            if count == 0:
+                continue
+            pct = (count / total) * 100
+            bars.append(
+                {
+                    "rank": idx,
+                    "emoji": ranking_emoji(idx),
+                    "count": count,
+                    "pct": round(pct, 1),
+                }
+            )
     return {
         "title": title,
-        "counts": counts,
-        "total": total,
         "start": start.isoformat(),
-        "end": today.isoformat(),
+        "end": end.isoformat(),
+        "total": total,
         "bars": bars,
     }
 
-@app.route("/report/weekly")
-def weekly_report():
-    report = _build_report("weekly")
-    return _render_index(report=report, open_report_modal=True)
 
-@app.route("/report/monthly")
+# =========================================================
+# Routes
+# =========================================================
+
+@app.route("/")
+def index():
+    entries = _sorted_entries()
+    today = date.today()
+    summary = _streak_summary_for_ui()
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        password_set=(ENTRY_PASSWORD is not None),
+        open_view_modal=False,
+        open_edit_modal=False,
+        open_report_modal=False,
+    )
+
+
+# ---------- CRUD for entries ----------
+
+@app.post("/entries/add")
+def add_entry():
+    title = request.form.get("title", "").strip()
+    year = int(request.form.get("year"))
+    month = int(request.form.get("month"))
+    day = int(request.form.get("day"))
+    body = request.form.get("body", "")
+    ranking = int(request.form.get("ranking", "5"))
+
+    # Mood rating (1–100), default 50 if not provided
+    mood_rating_raw = request.form.get("mood_rating", "").strip()
+    try:
+        mood_rating = int(mood_rating_raw)
+    except ValueError:
+        mood_rating = 50
+    mood_rating = max(1, min(100, mood_rating))
+
+    # Tags
+    tags_str = request.form.get("tags", "")
+    tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else None
+
+    # Biometrics
+    biometrics = {}
+    for key in BIOMETRICS.keys():
+        val = request.form.get(f"bio_{key}", "").strip()
+        if val:
+            biometrics[key] = val
+
+    mj.mj_log_entry(
+        title,
+        day,
+        month,
+        year,
+        body,
+        ranking,
+        mood_rating,
+        tags=tags,
+        biometrics=biometrics if biometrics else None,
+    )
+    flash("Entry created ✅", "success")
+    return redirect(url_for("index"))
+
+
+@app.get("/entries/<entry_id>")
+def view_entry(entry_id):
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    entries = _sorted_entries()
+    today = date.today()
+    summary = _streak_summary_for_ui()
+
+    # By default: if not private, show body; if private, ask password
+    view_body = None
+    view_ask_password = False
+    if not e.is_private_check():
+        view_body = e.entry_body
+    else:
+        view_ask_password = True
+
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        password_set=(ENTRY_PASSWORD is not None),
+        view_e=e,
+        view_body=view_body,
+        view_ask_password=view_ask_password,
+        open_view_modal=True,
+        open_edit_modal=False,
+        open_report_modal=False,
+    )
+
+
+@app.post("/entries/<entry_id>/unlock")
+def unlock_entry(entry_id):
+    global ENTRY_PASSWORD
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    pw = request.form.get("password", "")
+    if ENTRY_PASSWORD is None or pw != ENTRY_PASSWORD:
+        flash("Incorrect password.", "error")
+        return redirect(url_for("view_entry", entry_id=entry_id))
+
+    # Correct password: show the body
+    entries = _sorted_entries()
+    today = date.today()
+    summary = _streak_summary_for_ui()
+
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        password_set=True,
+        view_e=e,
+        view_body=e.entry_body,
+        view_ask_password=False,
+        open_view_modal=True,
+        open_edit_modal=False,
+        open_report_modal=False,
+    )
+
+
+@app.get("/entries/<entry_id>/edit")
+def edit_entry_open(entry_id):
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    entries = _sorted_entries()
+    today = date.today()
+    summary = _streak_summary_for_ui()
+
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        password_set=(ENTRY_PASSWORD is not None),
+        edit_e=e,
+        open_edit_modal=True,
+        open_view_modal=False,
+        open_report_modal=False,
+    )
+
+
+@app.post("/entries/<entry_id>/edit")
+def edit_entry_save(entry_id):
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    title = request.form.get("title", "").strip()
+    year = int(request.form.get("year"))
+    month = int(request.form.get("month"))
+    day = int(request.form.get("day"))
+    body = request.form.get("body", "")
+    ranking = int(request.form.get("ranking", "5"))
+
+    mood_rating_raw = request.form.get("mood_rating", "").strip()
+    try:
+        mood_rating = int(mood_rating_raw)
+    except ValueError:
+        mood_rating = e.mood_rating
+    mood_rating = max(1, min(100, mood_rating))
+
+    mj.mj_edit_entry(
+        entry_id,
+        title,
+        day,
+        month,
+        year,
+        body,
+        ranking,
+        mood_rating,
+    )
+    flash("Entry updated ✅", "success")
+    return redirect(url_for("index"))
+
+
+@app.post("/entries/<entry_id>/delete")
+def delete_entry(entry_id):
+    if mj.mj_delete_entry(entry_id):
+        flash("Entry deleted.", "success")
+    else:
+        flash("Entry not found.", "error")
+    return redirect(url_for("index"))
+
+
+# ---------- Privacy ----------
+
+@app.post("/entries/<entry_id>/make-private")
+def make_private(entry_id):
+    global ENTRY_PASSWORD
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    if ENTRY_PASSWORD is None:
+        pw = request.form.get("password", "").strip()
+        if not pw:
+            flash("Password required to make private.", "error")
+            return redirect(url_for("view_entry", entry_id=entry_id))
+        ENTRY_PASSWORD = pw
+
+    e.set_privacy_setting(True)
+    flash("Entry set to private 🔒", "success")
+    return redirect(url_for("index"))
+
+
+# ---------- Tags ----------
+
+@app.post("/entries/<entry_id>/tags/add")
+def add_tag(entry_id):
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    tag = request.form.get("tag", "")
+    if e.add_tag(tag):
+        flash("Tag added.", "success")
+    else:
+        flash("Tag not added (maybe empty or duplicate).", "error")
+    return redirect(url_for("edit_entry_open", entry_id=entry_id))
+
+
+@app.post("/entries/<entry_id>/tags/delete")
+def delete_tag(entry_id):
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    tag = request.form.get("tag", "")
+    if e.remove_tag(tag):
+        flash("Tag removed.", "success")
+    else:
+        flash("Tag not found.", "error")
+    return redirect(url_for("edit_entry_open", entry_id=entry_id))
+
+
+@app.post("/entries/<entry_id>/tags/clear")
+def clear_tags(entry_id):
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    e.clear_tags()
+    flash("All tags cleared.", "success")
+    return redirect(url_for("edit_entry_open", entry_id=entry_id))
+
+
+# ---------- Biometrics ----------
+
+@app.post("/entries/<entry_id>/biometric/clear/<key>")
+def clear_biometric(entry_id, key):
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    e.delete_biometric(key)
+    flash(f"Biometric '{key}' cleared.", "success")
+    return redirect(url_for("edit_entry_open", entry_id=entry_id))
+
+
+# ---------- Reports (weekly / monthly) ----------
+
+@app.get("/report/weekly")
+def weekly_report():
+    today = date.today()
+    counts = mj.mj_weekly_report(today.day, today.month, today.year)
+    if counts is None:
+        flash("No entries in the last 7 days.", "error")
+        return redirect(url_for("index"))
+
+    start = today - timedelta(days=6)
+    report = _build_report_dict("Weekly Mood Snapshot", counts, start, today)
+
+    entries = _sorted_entries()
+    summary = _streak_summary_for_ui()
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        password_set=(ENTRY_PASSWORD is not None),
+        report=report,
+        open_report_modal=True,
+        open_view_modal=False,
+        open_edit_modal=False,
+    )
+
+
+@app.get("/report/monthly")
 def monthly_report():
-    report = _build_report("monthly")
-    return _render_index(report=report, open_report_modal=True)
+    today = date.today()
+    counts = mj.mj_monthly_report(today.day, today.month, today.year)
+    if counts is None:
+        flash("No entries in the last 30 days.", "error")
+        return redirect(url_for("index"))
+
+    start = today - timedelta(days=29)
+    report = _build_report_dict("Monthly Mood Snapshot", counts, start, today)
+
+    entries = _sorted_entries()
+    summary = _streak_summary_for_ui()
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        password_set=(ENTRY_PASSWORD is not None),
+        report=report,
+        open_report_modal=True,
+        open_view_modal=False,
+        open_edit_modal=False,
+    )
+
+
+# ---------- Calendar + Mood Graph ----------
+
+@app.get("/calendar")
+def calendar_view():
+    """Basic timeline/calendar: show entries grouped by date for the current month."""
+    today = date.today()
+    cal = mj.mj_month_calendar(today.year, today.month)
+    entries = _sorted_entries()
+    summary = _streak_summary_for_ui()
+
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        calendar=cal,
+        password_set=(ENTRY_PASSWORD is not None),
+        open_view_modal=False,
+        open_edit_modal=False,
+        open_report_modal=False,
+    )
+
+
+@app.get("/mood-graph")
+def mood_graph():
+    """
+    Mood rating graph:
+    - mode=line : average mood per day (last 14 days)
+    - mode=bar  : rating frequency histogram (1–100) over last 14 days
+    """
+    today = date.today()
+    start = today - timedelta(days=13)
+    mode = request.args.get("mode", "line")
+    if mode not in ("line", "bar"):
+        mode = "line"
+
+    if mode == "bar":
+        graph_dict = mj.mj_mood_rating_graph("bar", start, today)
+        labels = list(range(1, 101))
+        values = [graph_dict.get(i, 0) for i in labels]
+    else:
+        graph_dict = mj.mj_mood_rating_graph("line", start, today)
+        # keys are dates; keep them ordered
+        ordered_items = sorted(graph_dict.items(), key=lambda kv: kv[0])
+        labels = [d.isoformat() for d, _ in ordered_items]
+        values = [v for _, v in ordered_items]
+
+    entries = _sorted_entries()
+    summary = _streak_summary_for_ui()
+
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        mood_graph_labels=labels,
+        mood_graph_values=values,
+        mood_graph_mode=mode,
+        password_set=(ENTRY_PASSWORD is not None),
+        open_view_modal=False,
+        open_edit_modal=False,
+        open_report_modal=False,
+    )
 
 
 if __name__ == "__main__":
