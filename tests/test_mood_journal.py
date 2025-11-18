@@ -520,3 +520,114 @@ def test_mj_mood_rating_graph():
         81: 0, 82: 0, 83: 0, 84: 0, 85: 0, 86: 0, 87: 0, 88: 0, 89: 0, 90: 0,
         91: 0, 92: 0, 93: 0, 94: 0, 95: 0, 96: 0, 97: 0, 98: 0, 99: 0, 100: 0
     }
+    """Organize Tags Test"""
+ 
+
+def test_mj_tag_organization_basic():
+    mj = Mood_Journal()
+
+    # Create some entries with overlapping tags
+    id1 = mj.mj_create_entry(
+        "E1",
+        1, 1, 2025,
+        "body 1",
+        ranking=5,
+        mood_rating=50,
+        tags=["Work", " gym "], 
+        biometrics=None,
+    )
+    id2 = mj.mj_create_entry(
+        "E2",
+        2, 1, 2025,
+        "body 2",
+        ranking=4,
+        mood_rating=60,
+        tags=["work", "friends"],
+        biometrics=None,
+    )
+    id3 = mj.mj_create_entry(
+        "E3",
+        3, 1, 2025,
+        "body 3",
+        ranking=3,
+        mood_rating=70,
+        tags=None,
+        biometrics=None,
+    )
+
+    # mj_all_tags should return all unique, cleaned tags in sorted order
+    all_tags = mj.mj_all_tags()
+    assert all_tags == ["friends", "gym", "work"]
+
+    # mj_entries_with_tag should be case-insensitive and ignore spaces
+    work_entries = mj.mj_entries_with_tag("WORK")
+    assert {e.entry_name for e in work_entries} == {"E1", "E2"}
+
+    gym_entries = mj.mj_entries_with_tag("  gym ")
+    assert {e.entry_name for e in gym_entries} == {"E1"}
+
+    # Tag that does not exist -> empty list
+    none_entries = mj.mj_entries_with_tag("nonexistent")
+    assert none_entries == []
+
+    # mj_tag_summary should count usages correctly:
+    # work   -> 2 entries (E1, E2)
+    # gym    -> 1 entry (E1)
+    # friends-> 1 entry (E2)
+    summary = mj.mj_tag_summary()
+    # expected order: most used first, then alphabetical on ties
+    assert summary == [
+        ("work", 2),
+        ("friends", 1),
+        ("gym", 1),
+    ]
+
+
+def test_mj_tag_organization_empty_journal():
+    mj = Mood_Journal()
+
+    # No entries → no tags
+    assert mj.mj_all_tags() == []
+    assert mj.mj_entries_with_tag("anything") == []
+    assert mj.mj_tag_summary() == []
+
+
+def test_mj_tag_organization_after_deletion():
+    mj = Mood_Journal()
+
+    id1 = mj.mj_create_entry(
+        "E1",
+        1, 1, 2025,
+        "body 1",
+        ranking=5,
+        mood_rating=50,
+        tags=["school", "project"],
+        biometrics=None,
+    )
+    id2 = mj.mj_create_entry(
+        "E2",
+        2, 1, 2025,
+        "body 2",
+        ranking=6,
+        mood_rating=55,
+        tags=["project"],
+        biometrics=None,
+    )
+
+    # Sanity check
+    assert set(mj.mj_all_tags()) == {"school", "project"}
+
+    # Delete one entry and ensure tags reflect current state
+    mj.mj_delete_entry(id2)
+
+    # "project" is still present because E1 still has it
+    assert set(mj.mj_all_tags()) == {"school", "project"}
+
+    summary = dict(mj.mj_tag_summary())
+    # "project" now used only once (E1)
+    assert summary["project"] == 1
+    assert summary["school"] == 1
+
+    # Entries with tag "project" now only include E1
+    project_entries = mj.mj_entries_with_tag("project")
+    assert {e.entry_name for e in project_entries} == {"E1"}

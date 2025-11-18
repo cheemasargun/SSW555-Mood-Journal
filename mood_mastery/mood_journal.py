@@ -369,3 +369,35 @@ class Mood_Journal:
                     rating_graph_info[curr_rating] = rating_graph_info[curr_rating] + 1
         
         return rating_graph_info
+    #Organize tags 
+    def mj_all_tags(self):
+        """Returns sorted list of all unique tags"""
+        tag_set: set[str] = set()
+        for e in self.entries_dict.values():
+            # Entry.tags is already cleaned (lowercased, stripped) by Entry.add_tag
+            for t in getattr(e, "tags", []):
+                tag_set.add(t)
+        return sorted(tag_set)
+    def mj_entries_with_tag(self, tag):
+        """Returns all entries with given tag sorted by date and name"""
+        items: list[Entry] = []
+        for e in self.entries_dict.values():
+            if e.has_tag(tag):
+                items.append(e)
+        items.sort(
+            key=lambda e: (
+                self._entry_date(e),
+                getattr(e, "entry_name", ""),
+                getattr(e, "entry_id_str", ""),
+            )
+        )
+        return items
+    def mj_tag_summary(self):
+        """Returns a list of  pairs summarizing how often a tag is used"""
+        counts: dict[str, int] = {}
+        for e in self.entries_dict.values():
+            for t in getattr(e, "tags", []):
+                counts[t] = counts.get(t, 0) + 1
+
+        # Convert to sorted list of (tag, count)
+        return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
