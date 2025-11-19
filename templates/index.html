@@ -270,6 +270,115 @@
     {% endif %}
   </div>
 </div>
+
+<!-- ========================= -->
+<!-- Tag Organizer (NEW)      -->
+<!-- ========================= -->
+<div class="mt-10 mj-card rounded-xl shadow-sm border p-6">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h3 class="text-sm font-semibold text-slate-50">Tag Organizer</h3>
+      <p class="text-xs text-slate-400 mt-1">
+        See what you write about most and quickly jump to entries by tag.
+      </p>
+    </div>
+    <div class="flex gap-2 text-[11px]">
+      <a href="{{ url_for('index', show='tags') }}"
+         class="rounded-lg px-2 py-1 bg-slate-900 text-slate-100 border border-slate-700 hover:bg-slate-800">
+        Refresh tags
+      </a>
+      <a href="{{ url_for('index', show='tag-summary') }}"
+         class="rounded-lg px-2 py-1 bg-slate-900 text-slate-100 border border-slate-700 hover:bg-slate-800">
+        Refresh summary
+      </a>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-6 text-xs sm:text-sm">
+    <!-- Column 1: All tags -->
+    <section>
+      <h4 class="font-semibold text-slate-100 mb-2">All tags</h4>
+      {% if all_tags is defined and all_tags %}
+        <div class="flex flex-wrap gap-2">
+          {% for t in all_tags %}
+            <a href="{{ url_for('index', tag=t) }}"
+               class="inline-flex items-center rounded-full bg-slate-900 text-slate-200 px-3 py-1 border border-slate-700 hover:bg-slate-800">
+              #{{ t }}
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-slate-400">
+          No tags yet. Add tags to entries to organize them by theme.
+        </p>
+      {% endif %}
+    </section>
+
+    <!-- Column 2: Tag usage summary -->
+    <section>
+      <h4 class="font-semibold text-slate-100 mb-2">Most used tags</h4>
+      {% if tag_summary is defined and tag_summary %}
+        <div class="space-y-1">
+          {% for t, count in tag_summary %}
+          <div class="flex items-center justify-between">
+            <a href="{{ url_for('index', tag=t) }}"
+               class="text-slate-100 hover:underline">#{{ t }}</a>
+            <span class="text-slate-400">{{ count }} entr{{ 'ies' if count != 1 else 'y' }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-slate-400">
+          Tag usage summary will appear here after you refresh it and have tagged entries.
+        </p>
+      {% endif %}
+    </section>
+
+    <!-- Column 3: Search entries by tag -->
+    <section>
+      <h4 class="font-semibold text-slate-100 mb-2">Entries for a tag</h4>
+      <form method="get" action="{{ url_for('index') }}" class="flex flex-col gap-2 mb-3">
+        <div class="flex gap-2 items-center">
+          <input name="tag"
+                 value="{{ selected_tag if selected_tag is defined else '' }}"
+                 class="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 text-xs sm:text-sm"
+                 placeholder="e.g., work, gym, study" />
+          <button class="rounded-xl px-3 py-2 mj-accent-btn text-xs sm:text-sm">
+            Filter
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400">
+          Matching is case-insensitive and ignores extra spaces.
+        </p>
+      </form>
+
+      {% if tag_entries is defined %}
+        {% if tag_entries %}
+          <p class="text-[11px] text-slate-300 mb-2">
+            Showing entries tagged <span class="font-semibold">#{{ selected_tag }}</span>:
+          </p>
+          <ul class="space-y-1 max-h-32 overflow-y-auto">
+            {% for e in tag_entries %}
+              <li class="flex items-center justify-between">
+                <a href="{{ url_for('view_entry', entry_id=e.entry_id_str) }}"
+                   class="text-slate-100 hover:underline">
+                  {{ e.entry_name }}
+                </a>
+                <span class="text-[11px] text-slate-500">
+                  {{ e.entry_date.isoformat() }}
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-[11px] text-slate-400">
+            No entries found for that tag.
+          </p>
+        {% endif %}
+      {% endif %}
+    </section>
+  </div>
+</div>
 {% endblock %}
 
 {% block modals %}

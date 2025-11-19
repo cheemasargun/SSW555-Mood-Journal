@@ -146,6 +146,37 @@ def _build_report_dict(title: str, counts: list[int], start: date, end: date) ->
     }
 
 
+# ----------------- TAG ORGANIZER CONTEXT -----------------
+
+
+def _tag_context(selected_tag: str | None = None) -> dict:
+    """
+    Common context for the tag organizer UI in index.html.
+    - all_tags: list of all unique tags (sorted)
+    - tag_summary: list[(tag, count)] sorted by usage
+    - tag_entries: entries matching a selected tag (or None if no tag)
+    - selected_tag: normalized tag string, or None
+    """
+    all_tags = mj.mj_all_tags()
+    tag_summary = mj.mj_tag_summary()
+
+    # tag can come from argument or query param ?tag=...
+    tag_param = selected_tag or request.args.get("tag", "").strip()
+    tag_entries = None
+    norm_tag = None
+
+    if tag_param:
+        norm_tag = tag_param.strip()
+        tag_entries = mj.mj_entries_with_tag(norm_tag)
+
+    return {
+        "all_tags": all_tags,
+        "tag_summary": tag_summary,
+        "tag_entries": tag_entries,
+        "selected_tag": norm_tag,
+    }
+
+
 # =========================================================
 # Routes
 # =========================================================
@@ -156,6 +187,8 @@ def index():
     entries = _sorted_entries()
     today = date.today()
     summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
+
     return render_template(
         "index.html",
         entries=entries,
@@ -165,6 +198,7 @@ def index():
         open_view_modal=False,
         open_edit_modal=False,
         open_report_modal=False,
+        **tag_ctx,
     )
 
 
@@ -223,6 +257,7 @@ def view_entry(entry_id):
     entries = _sorted_entries()
     today = date.today()
     summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
 
     view_body = None
     view_ask_password = False
@@ -243,6 +278,7 @@ def view_entry(entry_id):
         open_view_modal=True,
         open_edit_modal=False,
         open_report_modal=False,
+        **tag_ctx,
     )
 
 
@@ -262,6 +298,7 @@ def unlock_entry(entry_id):
     entries = _sorted_entries()
     today = date.today()
     summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
 
     return render_template(
         "index.html",
@@ -275,6 +312,7 @@ def unlock_entry(entry_id):
         open_view_modal=True,
         open_edit_modal=False,
         open_report_modal=False,
+        **tag_ctx,
     )
 
 
@@ -288,6 +326,7 @@ def edit_entry_open(entry_id):
     entries = _sorted_entries()
     today = date.today()
     summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
 
     return render_template(
         "index.html",
@@ -299,6 +338,7 @@ def edit_entry_open(entry_id):
         open_edit_modal=True,
         open_view_modal=False,
         open_report_modal=False,
+        **tag_ctx,
     )
 
 
@@ -445,6 +485,8 @@ def weekly_report():
 
     entries = _sorted_entries()
     summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
+
     return render_template(
         "index.html",
         entries=entries,
@@ -455,6 +497,7 @@ def weekly_report():
         open_report_modal=True,
         open_view_modal=False,
         open_edit_modal=False,
+        **tag_ctx,
     )
 
 
@@ -471,6 +514,8 @@ def monthly_report():
 
     entries = _sorted_entries()
     summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
+
     return render_template(
         "index.html",
         entries=entries,
@@ -481,6 +526,7 @@ def monthly_report():
         open_report_modal=True,
         open_view_modal=False,
         open_edit_modal=False,
+        **tag_ctx,
     )
 
 
@@ -496,6 +542,7 @@ def calendar_view():
     cal = mj.mj_month_calendar(today.year, today.month)
     entries = _sorted_entries()
     summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
 
     return render_template(
         "index.html",
@@ -507,6 +554,7 @@ def calendar_view():
         open_view_modal=False,
         open_edit_modal=False,
         open_report_modal=False,
+        **tag_ctx,
     )
 
 
@@ -535,6 +583,7 @@ def mood_graph():
 
     entries = _sorted_entries()
     summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
 
     return render_template(
         "index.html",
@@ -548,6 +597,7 @@ def mood_graph():
         open_view_modal=False,
         open_edit_modal=False,
         open_report_modal=False,
+        **tag_ctx,
     )
 
 
