@@ -1038,6 +1038,65 @@
   </div>
 </dialog>
 
+<!-- Clear Data Modal -->
+<div id="clearDataModal" class="hidden fixed inset-0 z-50">
+  <div class="absolute inset-0 bg-black/60" onclick="closeModal('clearDataModal')"></div>
+  <div class="relative max-w-md mx-auto mt-32 w-[92%]">
+    <div class="mj-card rounded-2xl shadow-xl border border-rose-700/50">
+      <!-- Header -->
+      <div class="px-6 pt-6 pb-4 flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold text-rose-100">Clear All Data</h3>
+          <p class="text-sm text-rose-300/80 mt-1">This action cannot be undone</p>
+        </div>
+        <button class="text-rose-400 hover:text-rose-200" onclick="closeModal('clearDataModal')">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div class="px-6 pb-6">
+        <div class="bg-rose-900/30 border border-rose-700/50 rounded-xl p-4 mb-4">
+          <div class="flex items-center gap-3">
+            <div class="text-rose-400 text-xl">⚠️</div>
+            <div class="text-sm">
+              <p class="text-rose-100 font-medium">Warning: Destructive Action</p>
+              <p class="text-rose-300/80 mt-1">
+                This will permanently delete all journal entries, streaks, tags, and biometric data.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form method="post" action="{{ url_for('clear_all_data') }}" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-rose-100 mb-2">
+              Type "confirm" to proceed:
+            </label>
+            <input name="password" type="text" 
+                   class="w-full rounded-xl border border-rose-700 bg-rose-900/30 px-3 py-2 text-rose-50 placeholder-rose-400"
+                   placeholder="confirm"
+                   required />
+            <p class="text-xs text-rose-400 mt-1">
+              This is required to prevent accidental data loss.
+            </p>
+          </div>
+
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button type="button"
+                    onclick="closeModal('clearDataModal')"
+                    class="rounded-xl px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 text-sm">
+              Cancel
+            </button>
+            <button type="submit"
+                    class="rounded-xl px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium">
+              Clear All Data
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
