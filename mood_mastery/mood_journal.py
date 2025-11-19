@@ -401,3 +401,21 @@ class Mood_Journal:
 
         # Convert to sorted list of (tag, count)
         return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    
+    #takes into account ranking(emoji), mood rating(scale from 1-100)
+    def mj_emoji_groups(self, emoji):
+        #creates a list with the keys of every entry that has a given emoji
+        keys = []
+        ratingCount = [0] * 100
+
+        for i in self.entries_dict.keys():
+            if self.entries_dict[i].ranking == emoji:
+                ratingCount[self.entries_dict[i].mood_rating - 1] += 1
+                keys.append(i)
+
+        return ratingCount, keys
+
+        
+        
+
+

@@ -600,6 +600,120 @@ def mood_graph():
         **tag_ctx,
     )
 
+# ---------- Emoji Groups Report ----------
+
+@app.get("/emoji-groups")
+def emoji_groups():
+    """Show all emoji groups with distribution"""
+    emoji_data = {}
+    
+    # Get data for all emojis (1-5 rankings)
+    for emoji_rank in range(1, 6):
+        rating_count, entry_keys = mj.mj_emoji_groups(emoji_rank)
+        total_entries = sum(rating_count)
+        
+        # Only include emojis that have entries
+        if total_entries > 0:
+            # Create distribution bars
+            distribution = []
+            for rating in range(100):
+                count = rating_count[rating]
+                if count > 0:
+                    pct = (count / total_entries) * 100
+                    distribution.append({
+                        'rating': rating + 1,
+                        'count': count,
+                        'pct': round(pct, 1)
+                    })
+            
+            emoji_data[emoji_rank] = {
+                'emoji': ranking_emoji(emoji_rank),
+                'total_entries': total_entries,
+                'distribution': distribution,
+                'entry_keys': entry_keys
+            }
+
+    entries = _sorted_entries()
+    today = date.today()
+    summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
+
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        password_set=(ENTRY_PASSWORD is not None),
+        emoji_groups_data=emoji_data,
+        open_emoji_groups_modal=True,
+        open_view_modal=False,
+        open_edit_modal=False,
+        open_report_modal=False,
+        **tag_ctx,
+    )
+
+
+@app.get("/emoji-groups/<int:emoji_rank>")
+def emoji_group_detail(emoji_rank):
+    """Show detailed view for a specific emoji group"""
+    if emoji_rank < 1 or emoji_rank > 5:
+        flash("Invalid emoji rank.", "error")
+        return redirect(url_for("emoji_groups"))
+
+    rating_count, entry_keys = mj.mj_emoji_groups(emoji_rank)
+    total_entries = sum(rating_count)
+    
+    if total_entries == 0:
+        flash(f"No entries found for {ranking_emoji(emoji_rank)} emoji.", "error")
+        return redirect(url_for("emoji_groups"))
+
+    # Get the actual entry objects for the keys
+    emoji_entries = []
+    for key in entry_keys:
+        entry = mj.mj_get_entry(key)
+        if entry:
+            emoji_entries.append(entry)
+    
+    # Sort entries by date (newest first)
+    emoji_entries.sort(key=lambda e: e.entry_date, reverse=True)
+    
+    # Create distribution data
+    distribution = []
+    for rating in range(100):
+        count = rating_count[rating]
+        if count > 0:
+            pct = (count / total_entries) * 100
+            distribution.append({
+                'rating': rating + 1,
+                'count': count,
+                'pct': round(pct, 1)
+            })
+
+    entries = _sorted_entries()
+    today = date.today()
+    summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
+
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        password_set=(ENTRY_PASSWORD is not None),
+        emoji_group_detail={
+            'rank': emoji_rank,
+            'emoji': ranking_emoji(emoji_rank),
+            'total_entries': total_entries,
+            'distribution': distribution,
+            'emoji_entries': emoji_entries
+        },
+        open_emoji_group_detail_modal=True,
+        open_emoji_groups_modal=False,
+        open_view_modal=False,
+        open_edit_modal=False,
+        open_report_modal=False,
+        **tag_ctx,
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)
