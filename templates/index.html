@@ -859,6 +859,185 @@
 <script>openModal('reportModal');</script>
 {% endif %}
 {% endif %}
+
+<!-- Emoji Groups Overview Modal -->
+<dialog id="emojiGroupsModal" class="modal" {% if open_emoji_groups_modal %}open{% endif %}>
+  <div class="absolute inset-0 bg-black/60" onclick="emojiGroupsModal.close()"></div>
+  <div class="relative max-w-4xl mx-auto mt-16 w-[92%]">
+    <div class="mj-card rounded-2xl shadow-xl max-h-[85vh] flex flex-col border">
+      <!-- Header -->
+      <div class="px-6 pt-6 pb-4 flex items-start justify-between">
+        <h3 class="text-lg font-semibold text-slate-50">Emoji Groups Analysis</h3>
+        <button class="text-slate-400 hover:text-slate-200" onclick="emojiGroupsModal.close()">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div class="px-6 pb-6 overflow-y-auto">
+        {% if emoji_groups_data %}
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for rank in range(1, 6) %}
+              {% if rank in emoji_groups_data %}
+                {% set group = emoji_groups_data[rank] %}
+                <div class="mj-card-soft rounded-xl p-4 border border-slate-700">
+                  <div class="text-center mb-4">
+                    <span class="text-4xl">{{ group.emoji }}</span>
+                    <h4 class="text-sm font-semibold text-slate-100 mt-2">{{ group.total_entries }} entries</h4>
+                  </div>
+                  
+                  {% if group.distribution %}
+                    <div class="space-y-2 max-h-40 overflow-y-auto">
+                      {% for item in group.distribution %}
+                        <div class="flex items-center justify-between text-xs">
+                          <span class="text-slate-300">Rating {{ item.rating }}</span>
+                          <div class="flex items-center gap-2">
+                            <div class="w-16 h-2 bg-slate-700 rounded-full overflow-hidden">
+                              <div class="h-full mj-accent-btn rounded-full" style="width: {{ item.pct }}%"></div>
+                            </div>
+                            <span class="text-slate-400 text-xs w-12 text-right">{{ item.count }} ({{ item.pct }}%)</span>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <p class="text-xs text-slate-400 text-center">No mood rating data</p>
+                  {% endif %}
+                  
+                  <div class="mt-4 text-center">
+                    <a href="{{ url_for('emoji_group_detail', emoji_rank=rank) }}" 
+                       class="inline-block rounded-xl px-3 py-2 mj-accent-btn text-xs">
+                      View All Entries
+                    </a>
+                  </div>
+                </div>
+              {% else %}
+                <div class="mj-card-soft rounded-xl p-4 border border-slate-700 opacity-50 text-center">
+                  <span class="text-4xl">{{ ranking_emoji(rank) }}</span>
+                  <h4 class="text-sm font-semibold text-slate-100 mt-2">0 entries</h4>
+                  <p class="text-xs text-slate-400 mt-2">No entries with this emoji</p>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-center py-8">
+            <p class="text-slate-400">No emoji group data available.</p>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Footer -->
+      <div class="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-end">
+        <button class="rounded-xl px-4 py-2 bg-slate-900 text-slate-100 hover:bg-slate-800 text-sm"
+                onclick="emojiGroupsModal.close()">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Emoji Group Detail Modal -->
+<dialog id="emojiGroupDetailModal" class="modal" {% if open_emoji_group_detail_modal %}open{% endif %}>
+  <div class="absolute inset-0 bg-black/60" onclick="emojiGroupDetailModal.close()"></div>
+  <div class="relative max-w-4xl mx-auto mt-16 w-[92%]">
+    <div class="mj-card rounded-2xl shadow-xl max-h-[85vh] flex flex-col border">
+      <!-- Header -->
+      <div class="px-6 pt-6 pb-4 flex items-start justify-between">
+        <div>
+          <h3 class="text-lg font-semibold text-slate-50">
+            <span class="text-2xl mr-2">{{ emoji_group_detail.emoji if emoji_group_detail }}</span>
+            Emoji Group Details
+          </h3>
+          {% if emoji_group_detail %}
+            <p class="text-sm text-slate-400">{{ emoji_group_detail.total_entries }} total entries</p>
+          {% endif %}
+        </div>
+        <button class="text-slate-400 hover:text-slate-200" onclick="emojiGroupDetailModal.close()">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div class="px-6 pb-6 overflow-y-auto">
+        {% if emoji_group_detail %}
+          <!-- Distribution Section -->
+          <div class="mb-6">
+            <h4 class="font-semibold text-slate-100 mb-3">Mood Rating Distribution</h4>
+            <div class="space-y-2 max-h-60 overflow-y-auto">
+              {% for item in emoji_group_detail.distribution %}
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-slate-300 w-20">Rating {{ item.rating }}</span>
+                  <div class="flex-1 mx-3">
+                    <div class="w-full h-3 bg-slate-700 rounded-full overflow-hidden">
+                      <div class="h-full mj-accent-btn rounded-full" style="width: {{ item.pct }}%"></div>
+                    </div>
+                  </div>
+                  <span class="text-xs text-slate-400 w-16 text-right">{{ item.count }} ({{ item.pct }}%)</span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Entries List -->
+          <div>
+            <h4 class="font-semibold text-slate-100 mb-3">All Entries</h4>
+            <div class="space-y-3 max-h-96 overflow-y-auto">
+              {% for entry in emoji_group_detail.emoji_entries %}
+                <div class="mj-card-soft rounded-xl p-4 border border-slate-700">
+                  <div class="flex items-start justify-between mb-2">
+                    <div class="flex items-start gap-3">
+                      <span class="text-2xl">{{ entry.determine_ranking_emoji() }}</span>
+                      <div>
+                        <h5 class="font-medium text-slate-50">{{ entry.entry_name }}</h5>
+                        <p class="text-xs text-slate-400">{{ entry.entry_date.strftime('%B %d, %Y') }}</p>
+                        <p class="text-xs text-slate-400 mt-1">Mood rating: {{ entry.mood_rating }}</p>
+                        
+                        {% if entry.tags %}
+                          <div class="mt-2 flex flex-wrap gap-1">
+                            {% for tag in entry.tags %}
+                              <span class="text-[10px] bg-slate-800 text-slate-200 rounded-full px-2 py-0.5">
+                                #{{ tag }}
+                              </span>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <a href="{{ url_for('view_entry', entry_id=entry.entry_id_str) }}"
+                       class="rounded-lg px-3 py-1 text-xs bg-slate-100 text-slate-900 hover:bg-slate-200">
+                      View
+                    </a>
+                    <a href="{{ url_for('edit_entry_open', entry_id=entry.entry_id_str) }}"
+                       class="rounded-lg px-3 py-1 text-xs mj-accent-btn">
+                      Edit
+                    </a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% else %}
+          <div class="text-center py-8">
+            <p class="text-slate-400">No emoji group detail data available.</p>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Footer -->
+      <div class="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between">
+        <a href="{{ url_for('emoji_groups') }}"
+           class="rounded-xl px-4 py-2 bg-slate-800 text-slate-100 hover:bg-slate-700 text-sm">
+          Back to All Groups
+        </a>
+        <button class="rounded-xl px-4 py-2 bg-slate-900 text-slate-100 hover:bg-slate-800 text-sm"
+                onclick="emojiGroupDetailModal.close()">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -969,4 +1148,26 @@
       })();
     </script>
   {% endif %}
+
+  <!-- Auto-open emoji groups modals -->
+  <script>
+document.addEventListener('DOMContentLoaded', function() {
+  {% if open_emoji_groups_modal %}
+    console.log('Opening emoji groups modal');
+    const emojiGroupsModal = document.getElementById('emojiGroupsModal');
+    if (emojiGroupsModal) {
+      emojiGroupsModal.showModal();
+    }
+  {% endif %}
+  
+  {% if open_emoji_group_detail_modal %}
+    console.log('Opening emoji group detail modal');
+    const emojiGroupDetailModal = document.getElementById('emojiGroupDetailModal');
+    if (emojiGroupDetailModal) {
+      emojiGroupDetailModal.showModal();
+    }
+  {% endif %}
+});
+  </script>
+
 {% endblock %}
