@@ -613,7 +613,7 @@ def test_mj_tag_organization_after_deletion():
         tags=["project"],
         biometrics=None,
     )
-
+    #Test so it lets me commit pls
     # Sanity check
     assert set(mj.mj_all_tags()) == {"school", "project"}
 
