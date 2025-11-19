@@ -414,6 +414,9 @@ class Mood_Journal:
                 keys.append(i)
 
         return ratingCount, keys
+    
+    def mj_clear_all_data(self):
+        self.entries_dict.clear()
 
         
         

@@ -715,5 +715,22 @@ def emoji_group_detail(emoji_rank):
         **tag_ctx,
     )
 
+# ---------- Data Management ----------
+
+@app.post("/clear-all-data")
+def clear_all_data():
+    """Clear all journal entries"""
+    # Add confirmation password for safety
+    password = request.form.get("password", "").strip()
+    
+    # Simple confirmation - you might want to make this more secure
+    if password != "confirm":  # Change this to a more secure check if needed
+        flash("Please type 'confirm' in the password field to clear all data.", "error")
+        return redirect(url_for("index"))
+    
+    mj.mj_clear_all_data()
+    flash("All data has been cleared.", "success")
+    return redirect(url_for("index"))
+
 if __name__ == "__main__":
     app.run(debug=True)
