@@ -271,9 +271,8 @@
   </div>
 </div>
 
-<!-- ========================= -->
-<!-- Tag Organizer (NEW)      -->
-<!-- ========================= -->
+<!-- Tag Organizer   -->
+
 <div class="mt-10 mj-card rounded-xl shadow-sm border p-6">
   <div class="flex items-center justify-between mb-4">
     <div>
@@ -340,9 +339,9 @@
       <form method="get" action="{{ url_for('index') }}" class="flex flex-col gap-2 mb-3">
         <div class="flex gap-2 items-center">
           <input name="tag"
-                 value="{{ selected_tag if selected_tag is defined else '' }}"
-                 class="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 text-xs sm:text-sm"
-                 placeholder="e.g., work, gym, study" />
+       value="{{ selected_tag or '' }}"
+       class="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 text-xs sm:text-sm"
+       placeholder="e.g., work, gym, study" />
           <button class="rounded-xl px-3 py-2 mj-accent-btn text-xs sm:text-sm">
             Filter
           </button>
