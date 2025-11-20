@@ -27,76 +27,104 @@ wish to follow them to a T, or we can see how we'd do the equivalents with what 
 in entry.py and mood_journal.py
 """
 
-from extensions import db
 from datetime import datetime, date, timedelta
 from typing import Optional, Dict, List
-
-from mood_mastery.entry import Entry        # keep using Entry internally
-from models import JournalEntry             # new: DB model
-
+from extensions import db
+from models import JournalEntry, Tag, Biometric
+from mood_mastery.entry import Entry  # still used as in-memory object
 
 class Mood_Journal:
-    # Class attributes (will be shadowed by instance attributes)
-    entries_dict: Dict[str, Entry] = {}
-    streak_current: int = 0
-    streak_longest: int = 0
-    last_entry_date: Optional[date] = None
+    """
+    Mood Journal service layer.
+    - Uses Entry objects in-memory (for compatibility with tests).
+    - Persists data in NEW database tables (JournalEntry, Tag, Biometric).
+    - Supports streaks, reports, calendars, tags, and biometrics.
+    """
 
     def __init__(self):
-        """
-        On creation, load all existing rows from the DB into entries_dict,
-        so the app can 'remember' previous entries between runs
-        (US-33: Create Database & persist data).
-        """
-        self.entries_dict = {}
+        self.entries_dict: Dict[str, Entry] = {}
         self.streak_current = 0
         self.streak_longest = 0
-        self.last_entry_date = None
+        self.last_entry_date: Optional[date] = None
+        self._load_from_db()
 
-        # Load from the database if tables exist and app context is active.
-        try:
-            rows = (
-                JournalEntry.query
-                .order_by(JournalEntry.entry_date.asc(), JournalEntry.created_at.asc())
-                .all()
-            )
-        except Exception:
-            # In tests or environments without DB setup, just skip loading
-            rows = []
+    # ======================================================
+    # ================ DATABASE HELPERS =====================
+    # ======================================================
+
+    def _load_from_db(self):
+        """Load all JournalEntry rows + relationships into Entry objects."""
+        rows: List[JournalEntry] = JournalEntry.query.order_by(
+            JournalEntry.entry_date.asc(),
+            JournalEntry.created_at.asc()
+        ).all()
 
         for row in rows:
-            # Rebuild Entry from JournalEntry fields
-            d = row.entry_date
-            e = Entry(
-                row.entry_name,
-                d.day,
-                d.month,
-                d.year,
-                row.body or "",
-                row.ranking,
-                row.mood_rating,
-                tags=row.tags.split(",") if row.tags else None,
-                biometrics=row.biometrics or None,
-            )
-            # Keep the DB id_str so lookups are consistent
-            e.entry_id_str = row.entry_id_str
-            # Attach created_at for ordering
-            setattr(e, "created_at", row.created_at or datetime.combine(d, datetime.min.time()))
-            self.entries_dict[e.entry_id_str] = e
+            self.entries_dict[str(row.id)] = self._db_to_entry(row)
 
-        # Ensure streaks reflect persisted entries
+        # ensure streak reflects DB history
         self.recompute_streak()
 
-    # ---------- Helpers ----------
+    def _db_to_entry(self, row: JournalEntry) -> Entry:
+        """Convert DB row → Entry object"""
+        d = row.entry_date
+        e = Entry(
+            row.title,
+            d.day, d.month, d.year,
+            row.body or "",
+            row.rank,
+            row.mood_rating,
+            tags=[t.name for t in row.tags],
+            biometrics={b.data for b in row.biometrics} if row.biometrics else None,
+        )
+        e.entry_id_str = str(row.id)
+        e.is_private = row.is_private
+        setattr(e, "created_at", row.created_at)
+        return e
+
+    def _save_entry_to_db(self, entry: Entry) -> int:
+        """Persist Entry → JournalEntry row + tags + biometrics."""
+        row = JournalEntry(
+            title=entry.entry_name,
+            body=entry.entry_body,
+            rank=entry.ranking,
+            mood_rating=entry.mood_rating,
+            entry_date=entry.entry_date,
+            is_private=entry.is_private,
+            created_at=getattr(entry, "created_at", datetime.utcnow()),
+        )
+        db.session.add(row)
+        db.session.commit()  # row.id now exists
+
+        # Save tags
+        if getattr(entry, "tags", None):
+            for t in entry.tags:
+                self._add_tag_to_entry(row.id, t)
+
+        # Save biometrics
+        if getattr(entry, "biometrics", None):
+            b = Biometric(entry_id=row.id, data=entry.biometrics)
+            db.session.add(b)
+
+        db.session.commit()
+        return row.id
+
+    def _add_tag_to_entry(self, entry_id: int, tag_name: str):
+        """Ensure tag exists globally and attach it to entry."""
+        tag = Tag.query.filter_by(name=tag_name).first()
+        if not tag:
+            tag = Tag(name=tag_name)
+            db.session.add(tag)
+            db.session.commit()
+        entry = JournalEntry.query.get(entry_id)
+        entry.tags.append(tag)
+        db.session.commit()
+
+    # ======================================================
+    # ================ UTILITY HELPERS ======================
+    # ======================================================
 
     def _to_date(self, d) -> date:
-        """
-        Normalize various date shapes to datetime.date.
-        Supports:
-          - datetime.date
-          - (day, month, year) tuple
-          - Entry.entry_date as either of the above
-        """
         if isinstance(d, date):
             return d
         if isinstance(d, tuple) and len(d) == 3:
@@ -104,220 +132,90 @@ class Mood_Journal:
             return date(year, month, day)
         return date.today()
 
-    def _entry_date(self, e: Entry) -> date:
+    def _entry_date(self, e: Entry):
         return self._to_date(e.entry_date)
 
-    # ---------- Create / Log / Edit / Delete (US-33 & US-34) ----------
+    # ======================================================
+    # ================= CRUD FUNCTIONS =====================
+    # ======================================================
 
-    def mj_log_entry(
-        self,
-        entry_name: str,
-        entry_day: int,
-        entry_month: int,
-        entry_year: int,
-        entry_body: str,
-        ranking: int,
-        mood_rating: int,
-        tags=None,
-        biometrics=None,
-    ) -> str:
-        """
-        High-level helper used by UI:
-        - creates an entry (and persists it)
-        - updates streaks
-        - returns the entry_id_str
-        """
-        entry_id = self.mj_create_entry(
-            entry_name,
-            entry_day,
-            entry_month,
-            entry_year,
-            entry_body,
-            ranking,
-            mood_rating,
-            tags,
-            biometrics,
-        )
-        new_entry = self.mj_get_entry(entry_id)
-        if new_entry:
-            self.update_streak(new_entry.entry_date)
-        return entry_id
+    def mj_log_entry(self, entry_name, entry_day, entry_month, entry_year,
+                     entry_body, ranking, mood_rating, tags=None, biometrics=None) -> str:
+        eid = self.mj_create_entry(entry_name, entry_day, entry_month, entry_year,
+                                   entry_body, ranking, mood_rating, tags, biometrics)
+        new_entry = self.mj_get_entry(eid)
+        self.update_streak(new_entry.entry_date)
+        return eid
 
-    def mj_create_entry(
-        self,
-        entry_name: str,
-        entry_day: int,
-        entry_month: int,
-        entry_year: int,
-        entry_body: str,
-        ranking: int,
-        mood_rating: int,
-        tags=None,
-        biometrics=None,
-    ) -> str:
-        """
-        Creates a new Entry object, stores it in memory and in the database.
+    def mj_create_entry(self, entry_name, entry_day, entry_month, entry_year,
+                        entry_body, ranking, mood_rating, tags=None, biometrics=None):
+        new_entry = Entry(entry_name, entry_day, entry_month, entry_year,
+                          entry_body, ranking, mood_rating, tags, biometrics)
 
-        This satisfies US-33:
-        - Data is stored persistently in the DB
-        - When the user returns, entries can be reloaded from the DB
-        """
-        # 1) Build Entry object (your original behavior)
-        new_entry = Entry(
-            entry_name,
-            entry_day,
-            entry_month,
-            entry_year,
-            entry_body,
-            ranking,
-            mood_rating,
-            tags,
-            biometrics,
-        )
-
-        # Ensure a created_at timestamp exists for sorting / history
+        # Ensure created_at for streak sorting
         if not hasattr(new_entry, "created_at"):
             setattr(new_entry, "created_at", datetime.utcnow())
 
-        new_entry_id = new_entry.entry_id_str
-        self.entries_dict[new_entry_id] = new_entry
+        # Persist to DB first
+        new_id = self._save_entry_to_db(new_entry)
+        new_entry.entry_id_str = str(new_id)
 
-        # 2) Persist to database (best-effort; if DB fails, in-memory still works)
-        try:
-            entry_date = self._entry_date(new_entry)
-            db_row = JournalEntry(
-                entry_id_str=new_entry.entry_id_str,
-                entry_name=new_entry.entry_name,
-                entry_date=entry_date,
-                body=new_entry.entry_body,
-                ranking=new_entry.ranking,
-                mood_rating=new_entry.mood_rating,
-                tags=",".join(new_entry.tags) if getattr(new_entry, "tags", None) else None,
-                biometrics=new_entry.biometrics or None,
-                created_at=new_entry.created_at,
-            )
-            db.session.add(db_row)
-            db.session.commit()
-        except Exception:
-            # In CI or environments without DB, we don't want tests to explode
-            db.session.rollback()
-
-        # Recompute streaks based on all entries
+        # Mirror in-memory
+        self.entries_dict[new_entry.entry_id_str] = new_entry
         self.recompute_streak()
-        return new_entry_id
+        return new_entry.entry_id_str
 
-    def mj_edit_entry(
-        self,
-        entry_id_str: str,
-        new_name: str,
-        new_day: int,
-        new_month: int,
-        new_year: int,
-        new_body: str,
-        new_ranking: int,
-        new_mood_rating: int,
-    ) -> bool:
-        """
-        Updates an existing entry both in memory and in the database.
-
-        This satisfies US-34:
-        - When the user edits data, the stored version changes
-        - Future use shows the updated data
-        """
+    def mj_edit_entry(self, entry_id_str, new_name, new_day, new_month, new_year,
+                      new_body, new_ranking, new_mood_rating):
         entry = self.entries_dict.get(entry_id_str)
         if not entry:
             return False
 
-        # Update in-memory Entry
-        entry.edit_entry(
-            new_name,
-            new_day,
-            new_month,
-            new_year,
-            new_body,
-            new_ranking,
-            new_mood_rating,
-        )
+        entry.edit_entry(new_name, new_day, new_month, new_year,
+                         new_body, new_ranking, new_mood_rating)
 
-        # Recompute streaks (date may have changed)
+        # Update DB
+        row: JournalEntry = JournalEntry.query.get(int(entry_id_str))
+        row.title = entry.entry_name
+        row.body = entry.entry_body
+        row.rank = entry.ranking
+        row.mood_rating = entry.mood_rating
+        row.entry_date = entry.entry_date
+        db.session.commit()
+
         self.recompute_streak()
-
-        # Update database row (best-effort)
-        try:
-            row = JournalEntry.query.filter_by(entry_id_str=entry_id_str).first()
-            if row:
-                row.entry_name = entry.entry_name
-                row.entry_date = self._entry_date(entry)
-                row.body = entry.entry_body
-                row.ranking = entry.ranking
-                row.mood_rating = entry.mood_rating
-                row.tags = ",".join(entry.tags) if getattr(entry, "tags", None) else None
-                row.biometrics = entry.biometrics or None
-                db.session.commit()
-            else:
-                # If not found (shouldn't happen), recreate row to avoid data loss
-                entry_date = self._entry_date(entry)
-                new_row = JournalEntry(
-                    entry_id_str=entry.entry_id_str,
-                    entry_name=entry.entry_name,
-                    entry_date=entry_date,
-                    body=entry.entry_body,
-                    ranking=entry.ranking,
-                    mood_rating=entry.mood_rating,
-                    tags=",".join(entry.tags) if getattr(entry, "tags", None) else None,
-                    biometrics=entry.biometrics or None,
-                    created_at=getattr(entry, "created_at", datetime.utcnow()),
-                )
-                db.session.add(new_row)
-                db.session.commit()
-        except Exception:
-            db.session.rollback()
-
         return True
 
-    def mj_delete_entry(self, entry_id_str: str) -> bool:
-        """
-        Deletes an entry from memory and from the DB if present.
-        """
+    def mj_delete_entry(self, entry_id_str):
         removed = False
-
-        # In-memory
         if entry_id_str in self.entries_dict:
             del self.entries_dict[entry_id_str]
             removed = True
 
-        # Database
-        try:
-            row = JournalEntry.query.filter_by(entry_id_str=entry_id_str).first()
-            if row:
-                db.session.delete(row)
-                db.session.commit()
-                removed = True
-        except Exception:
-            db.session.rollback()
+        row = JournalEntry.query.get(int(entry_id_str))
+        if row:
+            db.session.delete(row)
+            db.session.commit()
+            removed = True
 
         if removed:
             self.recompute_streak()
 
         return removed
 
-    # ---------- Query / Utility methods (unchanged behavior) ----------
+    def mj_get_entry(self, entry_id_str):
+        return self.entries_dict.get(entry_id_str, False)
 
-    def mj_get_entry(self, entry_id_str: str):
-        if entry_id_str in self.entries_dict:
-            return self.entries_dict[entry_id_str]
-        return False
-
-    def mj_get_entry_privacy_status(self, entry_id_str: str):
+    def mj_get_entry_privacy_status(self, entry_id_str):
         entry = self.mj_get_entry(entry_id_str)
-        if not entry:
-            return None
-        return entry.is_private_check()
+        return None if not entry else entry.is_private_check()
 
-    def mj_get_all_entries(self) -> List[Entry]:
+    def mj_get_all_entries(self):
         return list(self.entries_dict.values())
 
-    # ---------- Streak System (unchanged) ----------
+    # ======================================================
+    # ================= STREAK SYSTEM ======================
+    # ======================================================
 
     def recompute_streak(self):
         entries = self.mj_get_all_entries()
@@ -327,37 +225,27 @@ class Mood_Journal:
             self.last_entry_date = None
             return
 
-        dates = sorted({self._entry_date(e) for e in entries})
+        dates = sorted({e.entry_date for e in entries})
         self.last_entry_date = dates[-1]
 
-        # Longest streak
-        longest = 1
-        run = 1
+        longest = run = 1
         for i in range(1, len(dates)):
-            if (dates[i] - dates[i - 1]) == timedelta(days=1):
+            if (dates[i] - dates[i-1]) == timedelta(days=1):
                 run += 1
             else:
                 longest = max(longest, run)
                 run = 1
         longest = max(longest, run)
 
-        # Current streak
         current = 1
         for j in range(len(dates) - 1, 0, -1):
-            if (dates[j] - dates[j - 1]) == timedelta(days=1):
+            if (dates[j] - dates[j-1]) == timedelta(days=1):
                 current += 1
             else:
                 break
 
         self.streak_current = current
         self.streak_longest = longest
-
-    def get_streak_summary(self):
-        return {
-            "current_streak": self.streak_current,
-            "longest_streak": self.streak_longest,
-            "last_entry_date": self.last_entry_date,
-        }
 
     def update_streak(self, entry_date: date):
         if self.last_entry_date is None:
@@ -379,77 +267,81 @@ class Mood_Journal:
             return
         self.recompute_streak()
 
-    # ---------- Weekly / Monthly Reports, Calendar, Graphs, Tags, Emoji ----------
+    def get_streak_summary(self):
+        return {
+            "current_streak": self.streak_current,
+            "longest_streak": self.streak_longest,
+            "last_entry_date": self.last_entry_date
+        }
+
+    # ======================================================
+    # ===================== REPORTS ========================
+    # ======================================================
 
     def mj_weekly_report(self, curr_day, curr_month, curr_year):
         curr_date = date(curr_year, curr_month, curr_day)
         weekly_dates = [curr_date - timedelta(days=i) for i in range(7)]
-        entries_to_report = []
+        entries = [k for k in self.entries_dict if self.entries_dict[k].entry_date in weekly_dates]
 
-        for key in self.entries_dict.keys():
-            for d in weekly_dates:
-                if self._entry_date(self.entries_dict[key]) == d:
-                    entries_to_report.append(key)
+        if not entries:
+            return None
 
         emoji_count = [0] * 8
-
-        if not entries_to_report:
-            return None
-        for key in entries_to_report:
-            self_idx = self.entries_dict[key].ranking - 1
-            if 0 <= self_idx < 8:
-                emoji_count[self_idx] += 1
+        for k in entries:
+            emoji_count[self.entries_dict[k].ranking - 1] += 1
         return emoji_count
 
     def mj_monthly_report(self, curr_day, curr_month, curr_year):
         curr_date = date(curr_year, curr_month, curr_day)
         monthly_dates = [curr_date - timedelta(days=i) for i in range(30)]
-        entries_to_report = []
+        entries = [k for k in self.entries_dict if self.entries_dict[k].entry_date in monthly_dates]
 
-        for key in self.entries_dict.keys():
-            for d in monthly_dates:
-                if self._entry_date(self.entries_dict[key]) == d:
-                    entries_to_report.append(key)
+        if not entries:
+            return None
 
         emoji_count = [0] * 8
-
-        if not entries_to_report:
-            return None
-        for key in entries_to_report:
-            self_idx = self.entries_dict[key].ranking - 1
-            if 0 <= self_idx < 8:
-                emoji_count[self_idx] += 1
+        for k in entries:
+            emoji_count[self.entries_dict[k].ranking - 1] += 1
         return emoji_count
 
-    def mj_entries_on(self, year: int, month: int, day: int) -> List[Entry]:
+    def mj_emoji_groups(self, emoji):
+        keys = []
+        ratingCount = [0] * 100
+
+        for k, e in self.entries_dict.items():
+            if e.ranking == emoji:
+                ratingCount[e.mood_rating - 1] += 1
+                keys.append(k)
+
+        return ratingCount, keys
+
+    # ======================================================
+    # ===================== CALENDAR =======================
+    # ======================================================
+
+    def mj_entries_on(self, year, month, day):
         target = date(year, month, day)
         items = [e for e in self.entries_dict.values() if self._entry_date(e) == target]
-        items.sort(
-            key=lambda e: (
-                getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
-                getattr(e, "entry_name", ""),
-                getattr(e, "entry_id_str", ""),
-            )
-        )
+
+        items.sort(key=lambda e: (
+            getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
+            getattr(e, "entry_name", ""),
+            getattr(e, "entry_id_str", "")
+        ))
         return items
 
-    def mj_entries_between(self, start: date, end: date) -> List[Entry]:
-        items: List[Entry] = []
-        for e in self.entries_dict.values():
-            d = self._entry_date(e)
-            if start <= d <= end:
-                items.append(e)
-        items.sort(
-            key=lambda e: (
-                self._entry_date(e),
-                getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
-                getattr(e, "entry_id_str", ""),
-            )
-        )
+    def mj_entries_between(self, start, end):
+        items = [e for e in self.entries_dict.values() if start <= self._entry_date(e) <= end]
+
+        items.sort(key=lambda e: (
+            self._entry_date(e),
+            getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
+            getattr(e, "entry_id_str", "")
+        ))
         return items
 
-    def mj_entries_grouped_by_day(self, start: date, end: date) -> Dict[date, List[Entry]]:
-        days: Dict[date, List[Entry]] = {}
+    def mj_entries_grouped_by_day(self, start, end):
+        days = {}
         cur = start
         while cur <= end:
             days[cur] = []
@@ -460,96 +352,58 @@ class Mood_Journal:
             if start <= d <= end:
                 days[d].append(e)
 
-        for d, lst in days.items():
-            lst.sort(
-                key=lambda e: (
-                    getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
-                    getattr(e, "entry_name", ""),
-                    getattr(e, "entry_id_str", ""),
-                )
-            )
+        for lst in days.values():
+            lst.sort(key=lambda e: (
+                getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
+                getattr(e, "entry_name", ""),
+                getattr(e, "entry_id_str", "")
+            ))
         return days
 
-    def mj_month_calendar(self, year: int, month: int) -> Dict[date, List[Entry]]:
+    def mj_month_calendar(self, year, month):
         first = date(year, month, 1)
         start = first - timedelta(days=first.weekday())
-        if month == 12:
-            next_first = date(year + 1, 1, 1)
-        else:
-            next_first = date(year, month + 1, 1)
+        next_first = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
         last = next_first - timedelta(days=1)
         end = last + timedelta(days=(6 - last.weekday()))
         return self.mj_entries_grouped_by_day(start, end)
 
-    def mj_mood_rating_graph(self, type_of_graph: str, start_date: date, end_date: date):
-        entries_grouped_by_day = self.mj_entries_grouped_by_day(start_date, end_date)
-        rating_graph_info = {}
-
-        if type_of_graph == "line":
-            for curr_day, list_of_entries in entries_grouped_by_day.items():
-                mood_ratings_avg = 0
-                if list_of_entries:
-                    for curr_entry in list_of_entries:
-                        mood_ratings_avg += curr_entry.mood_rating
-                    mood_ratings_avg = mood_ratings_avg / len(list_of_entries)
-                rating_graph_info[curr_day] = mood_ratings_avg
-
-        elif type_of_graph == "bar":
-            for i in range(1, 101):
-                rating_graph_info[i] = 0
-            for _, list_of_entries in entries_grouped_by_day.items():
-                for curr_entry in list_of_entries:
-                    curr_rating = curr_entry.mood_rating
-                    if 1 <= curr_rating <= 100:
-                        rating_graph_info[curr_rating] += 1
-
-        return rating_graph_info
+    # ======================================================
+    # ====================== TAGS ==========================
+    # ======================================================
 
     def mj_all_tags(self):
-        tag_set: set[str] = set()
+        tag_set = set()
         for e in self.entries_dict.values():
             for t in getattr(e, "tags", []):
                 tag_set.add(t)
         return sorted(tag_set)
 
     def mj_entries_with_tag(self, tag):
-        items: List[Entry] = []
-        for e in self.entries_dict.values():
-            if e.has_tag(tag):
-                items.append(e)
-        items.sort(
-            key=lambda e: (
-                self._entry_date(e),
-                getattr(e, "entry_name", ""),
-                getattr(e, "entry_id_str", ""),
-            )
-        )
+        items = [e for e in self.entries_dict.values() if e.has_tag(tag)]
+        items.sort(key=lambda e: (
+            self._entry_date(e),
+            getattr(e, "entry_name", ""),
+            getattr(e, "entry_id_str", ""),
+        ))
         return items
 
     def mj_tag_summary(self):
-        counts: Dict[str, int] = {}
+        counts = {}
         for e in self.entries_dict.values():
             for t in getattr(e, "tags", []):
                 counts[t] = counts.get(t, 0) + 1
         return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
 
-    def mj_emoji_groups(self, emoji_value: int):
-        keys = []
-        rating_count = [0] * 100
-
-        for k, e in self.entries_dict.items():
-            if e.ranking == emoji_value:
-                if 1 <= e.mood_rating <= 100:
-                    rating_count[e.mood_rating - 1] += 1
-                keys.append(k)
-
-        return rating_count, keys
+    # ======================================================
+    # ===================== ADMIN =========================
+    # ======================================================
 
     def mj_clear_all_data(self):
+        """Wipe ALL journal data (DB + memory)"""
         self.entries_dict.clear()
-        try:
-            JournalEntry.query.delete()
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+        JournalEntry.query.delete()
+        Tag.query.delete()
+        Biometric.query.delete()
+        db.session.commit()
         self.recompute_streak()
