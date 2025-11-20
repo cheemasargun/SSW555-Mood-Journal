@@ -1,12 +1,18 @@
 from extensions import db
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy.orm import relationship
 from sqlalchemy import ForeignKey
 
+
+# ======================================================
+# =============== LEGACY MODEL (DO NOT REMOVE) =========
+# ======================================================
+
 class MoodEntry(db.Model):
     """
-    Legacy model used by tests and backwards compatibility only.
-    NOT used by the new Mood Journal system.
+    Legacy model formerly used by the UI and tests.
+    We keep it ONLY for backward compatibility and import safety.
+    DO NOT use for new journal features.
     """
     id = db.Column(db.Integer, primary_key=True)
     mood = db.Column(db.String(20), nullable=False)
@@ -14,11 +20,11 @@ class MoodEntry(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-# =================================================
-# =============== NEW JOURNAL MODELS ===============
-# =================================================
+# ======================================================
+# =============== NEW JOURNAL MODELS ===================
+# ======================================================
 
-# Many-to-Many association table between JournalEntry and Tag
+# Many-to-many association table between journal entries and tags
 entry_tag = db.Table(
     "entry_tag",
     db.Column("entry_id", db.Integer, db.ForeignKey("journal_entry.id", ondelete="CASCADE")),
@@ -28,40 +34,45 @@ entry_tag = db.Table(
 
 class JournalEntry(db.Model):
     """
-    New primary model for the Mood Journal application.
-    Replaces MoodEntry for production features.
+    Main model for the new Mood Journal system.
+    Replaces MoodEntry for ALL new features.
+
+    We store entry_id_str so the Python Entry class can round-trip cleanly.
     """
     __tablename__ = "journal_entry"
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # Core journal data
+    # Match the Entry object ID (UUID string)
+    entry_id_str = db.Column(db.String(36), unique=True, nullable=False)
+
+    # Core journal content
     title = db.Column(db.String(200), nullable=False)
     body = db.Column(db.Text)
 
     # Mood data
-    rank = db.Column(db.Integer, nullable=False)         # e.g., emoji level
-    mood_rating = db.Column(db.Integer, nullable=False)  # 1–100 scale
+    rank = db.Column(db.Integer, nullable=False)         # emoji level from original app
+    mood_rating = db.Column(db.Integer, nullable=False)  # scale 1–100
 
-    # Metadata / privacy
+    # Privacy
     is_private = db.Column(db.Boolean, default=False)
 
-    # Date fields
+    # Date and metadata
     entry_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Many-to-many → tags
+    # Relationships
     tags = relationship("Tag", secondary=entry_tag, back_populates="entries")
-
-    # One-to-many → biometrics
     biometrics = relationship("Biometric", back_populates="entry", cascade="all, delete")
 
 
 class Tag(db.Model):
     """
-    Tags that can be assigned to journal entries (e.g. exercise, stressed, family).
-    Shared globally across entries, stored once.
+    Global tag list (unique). Tags are reused across entries.
+    Example: exercise, stressed, family, meditation
     """
+    __tablename__ = "tag"
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
 
@@ -70,14 +81,19 @@ class Tag(db.Model):
 
 class Biometric(db.Model):
     """
-    Optional biometric data (e.g., heart rate, sleep, calories, steps) per entry.
-    Stored as JSON for flexible structure.
+    Flexible biometric JSON storage, attached to one entry.
+    Example structure:
+        {"heart_rate": 72, "sleep": 6.5, "steps": 10452}
+
+    The JSON format allows any attribute to be added without schema changes.
     """
+    __tablename__ = "biometric"
+
     id = db.Column(db.Integer, primary_key=True)
     entry_id = db.Column(db.Integer, ForeignKey("journal_entry.id", ondelete="CASCADE"))
 
-    # 🧠 Flexible JSON (e.g. {"heart_rate": 78, "sleep": 6.2})
+    # Flexible JSON data
     data = db.Column(db.JSON, nullable=False)
 
-    # Link back to entry
+    # Relationship back to entry
     entry = relationship("JournalEntry", back_populates="biometrics")
