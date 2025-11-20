@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from extensions import db
 
 from flask import (
     Flask,
