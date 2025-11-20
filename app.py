@@ -16,8 +16,9 @@ from mood_mastery.entry import BIOMETRICS, Entry
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "dev-key"  # TODO: replace with env var in real deployment
 
-# In-memory journal instance
-mj = Mood_Journal()
+with app.app_context(): 
+    mj = Mood_Journal()
+
 
 # ----------------- THEME CONFIG -----------------
 
