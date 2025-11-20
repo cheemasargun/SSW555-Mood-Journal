@@ -31,6 +31,7 @@ from extensions import db
 from datetime import datetime, date, timedelta
 from mood_mastery.entry import Entry
 from typing import Optional, Dict, List, Tuple
+import json
 
 class Mood_Journal:
     # Attributes (TO BE UPDATED) (if we need attributes here, really)
@@ -52,6 +53,14 @@ class Mood_Journal:
         self.streak_current = 0
         self.streak_longest = 0
         self.last_entry_date = None
+
+        rows = MoodEntry.query.order_by(MoodEntry.entry_date.asc(), MoodEntry.created_at.asc()).all()
+        for row in rows:
+            entry = row.to_entry()
+            self.entries_dict[entry.entry_id_str] = entry
+
+        # Make sure streaks reflect persisted data
+        self.recompute_streak()
 
     def _to_date(self, d) -> date:
         """
@@ -86,11 +95,55 @@ class Mood_Journal:
         new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, mood_rating, tags, biometrics)
         new_entry_id = new_entry.entry_id_str
         self.entries_dict[new_entry_id] = new_entry
+
+        # added functionality for database
+        row = MoodEntry.from_entry(new_entry)
+        db.session.add(row)
+        db.session.commit()
+
         self.recompute_streak()
         return new_entry_id
 
+    # rewrote this to integrate with database
     def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int):
-        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, new_mood_rating)
+        # 1) Update in-memory Entry (existing behavior)
+        entry = self.entries_dict.get(entry_id_str)
+        if not entry:
+            return False  # no such entry in memory
+
+        entry.edit_entry(
+            new_name,
+            new_day,
+            new_month,
+            new_year,
+            new_body,
+            new_ranking,
+            new_mood_rating,
+        )
+
+        # 2) Update streaks if date changed
+        self.recompute_streak()
+
+        # 3) Update the DB row
+        row = MoodEntry.query.get(entry_id_str)
+        if not row:
+            # Optional: if DB somehow missing, recreate it from the updated Entry
+            row = MoodEntry.from_entry(entry)
+            db.session.add(row)
+        else:
+            # Keep DB fields in sync with Entry
+            row.entry_name = entry.entry_name
+            row.entry_date = entry.entry_date
+            row.entry_body = entry.entry_body
+            row.ranking = entry.ranking
+            row.mood_rating = entry.mood_rating
+            row.is_private = entry.is_private
+            row.tags_raw = ",".join(entry.tags) if entry.tags else None
+            row.biometrics_raw = json.dumps(entry.biometrics) if entry.biometrics else None
+
+        db.session.commit()
+        return True
+        
 
     def mj_delete_entry(self, entry_id_str: str):
         # I imagine this would search for an entry's unique id and remove it from the database.
@@ -103,12 +156,25 @@ class Mood_Journal:
         # In the meantime: use the del statement to delete the entry of the given entry_id from
         # self.entries_dict // example of formatting: del my_dict[id]
 
+        removed = False
+        
         if entry_id_str in self.entries_dict:
             del self.entries_dict[entry_id_str]
+            removed = True
+            
+        # 2) Remove from the database
+        row = MoodEntry.query.get(entry_id_str)
+       
+        if row:
+            db.session.delete(row)
+            db.session.commit()
+            removed = True
+
+        # 3) Recompute streak after deletion
+        if removed:
             self.recompute_streak()
-            return True
-        else:
-            return False
+
+        return removed
 
     def mj_get_entry(self, entry_id_str: str):
         """
@@ -417,7 +483,10 @@ class Mood_Journal:
     
     def mj_clear_all_data(self):
         self.entries_dict.clear()
-
+        # Clear DB as well
+        MoodEntry.query.delete()
+        db.session.commit()
+        self.recompute_streak()
         
         
 
