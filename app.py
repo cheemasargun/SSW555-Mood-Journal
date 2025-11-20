@@ -15,6 +15,9 @@ from mood_mastery.entry import BIOMETRICS, Entry
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "dev-key"  # TODO: replace with env var in real deployment
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
 
 with app.app_context(): 
     mj = Mood_Journal()
