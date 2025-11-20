@@ -54,6 +54,8 @@ class Mood_Journal:
         self.streak_longest = 0
         self.last_entry_date = None
 
+        from models import MoodEntry
+
         rows = MoodEntry.query.order_by(MoodEntry.entry_date.asc(), MoodEntry.created_at.asc()).all()
         for row in rows:
             entry = row.to_entry()
