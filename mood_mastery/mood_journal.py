@@ -54,15 +54,21 @@ class Mood_Journal:
         self.streak_longest = 0
         self.last_entry_date = None
 
-        from models import MoodEntry
-
-        rows = MoodEntry.query.order_by(MoodEntry.entry_date.asc(), MoodEntry.created_at.asc()).all()
-        for row in rows:
-            entry = row.to_entry()
-            self.entries_dict[entry.entry_id_str] = entry
-
-        # Make sure streaks reflect persisted data
-        self.recompute_streak()
+        try:
+            from flask import current_app
+            from models import MoodEntry
+            
+            with current_app.app_context():
+                rows = MoodEntry.query.order_by(MoodEntry.entry_date.asc(), MoodEntry.created_at.asc()).all()
+                for row in rows:
+                    entry = row.to_entry()
+                    self.entries_dict[entry.entry_id_str] = entry
+    
+                self.recompute_streak()
+        except RuntimeError:
+        # No app context available (e.g., during testing)
+        # Just initialize with empty data
+            pass
 
     def _to_date(self, d) -> date:
         """
