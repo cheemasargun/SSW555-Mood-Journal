@@ -493,8 +493,6 @@ class Mood_Journal:
     
     def mj_clear_all_data(self):
         self.entries_dict.clear()
-
-        
-        
-
-
+        MoodEntry.query.delete()
+        db.session.commit()
+        self.recompute_streak()
