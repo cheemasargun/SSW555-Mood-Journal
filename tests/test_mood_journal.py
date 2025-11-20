@@ -631,3 +631,16 @@ def test_mj_tag_organization_after_deletion():
     # Entries with tag "project" now only include E1
     project_entries = mj.mj_entries_with_tag("project")
     assert {e.entry_name for e in project_entries} == {"E1"}
+
+def test_mj_emoji_groups():
+    mj = Mood_Journal()
+    assert mj.mj_emoji_groups(0) == (([0] * 100), [])
+    print("emoji group Test Passed")
+
+def test_mj_clear_all_data():
+    mj = Mood_Journal()
+    mj.mj_create_entry("e1", 1, 1, 2025, "body", 3, 30)
+    mj.mj_create_entry("e1", 1, 1, 2025, "body", 3, 30)
+    mj.mj_clear_all_data()
+    assert mj.entries_dict == {}
+    print("clear all data Test Passed")
