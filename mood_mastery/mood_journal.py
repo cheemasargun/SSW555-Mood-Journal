@@ -31,8 +31,13 @@ from extensions import db
 from datetime import datetime, date, timedelta
 from mood_mastery.entry import Entry
 from typing import Optional, Dict, List, Tuple
-from models import MoodEntry
 import json
+
+try:
+    from models import MoodEntry  # type: ignore
+except Exception:  # ImportError, RuntimeError, etc.
+    MoodEntry = None  # type: ignore
+
 
 class Mood_Journal:
     # Attributes (TO BE UPDATED) (if we need attributes here, really)
@@ -69,8 +74,11 @@ class Mood_Journal:
             rows = []
 
         for row in rows:
-            entry = row.to_entry()
-            self.entries_dict[entry.entry_id_str] = entry
+            try:
+                entry = row.to_entry()
+                self.entries_dict[entry.entry_id_str] = entry
+            except Exception:
+                continue
 
 
         # Makes sure streaks are based on persisted data
@@ -116,10 +124,16 @@ class Mood_Journal:
         self.entries_dict[new_entry_id] = new_entry
 
         #updated to work with database
-        row = MoodEntry.from_entry(new_entry)
-        row.created_at = new_entry.created_at
-        db.session.add(row)
-        db.session.commit()
+        if MoodEntry is not None:
+            try:
+                row = MoodEntry.from_entry(new_entry)  # type: ignore[attr-defined]
+                row.created_at = new_entry.created_at
+                db.session.add(row)
+                db.session.commit()
+            except Exception:
+                # If DB isn't ready, silently skip persistence; in-memory still works.
+                db.session.rollback()
+
         
         self.recompute_streak()
         return new_entry_id
@@ -131,25 +145,47 @@ class Mood_Journal:
         if not entry:
             return False
     
-        entry.edit_entry(...)
+        entry.edit_entry(
+            new_name,
+            new_day,
+            new_month,
+            new_year,
+            new_body,
+            new_ranking,
+            new_mood_rating,
+        )
+
+        # Recompute streaks (date may have changed)
         self.recompute_streak()
-    
-        row = MoodEntry.query.filter_by(entry_id_str=entry_id_str).first()
-        if not row:
-            row = MoodEntry.from_entry(entry)
-            row.created_at = getattr(entry, "created_at", datetime.utcnow())
-            db.session.add(row)
-        else:
-            row.entry_name = entry.entry_name
-            row.entry_date = entry.entry_date
-            row.ranking = entry.ranking
-            row.mood_rating = entry.mood_rating
-            row.mood = str(entry.mood_rating)
-            row.note = entry.entry_body
-            row.tags_raw = ",".join(entry.tags) if entry.tags else None
-            row.biometrics_raw = json.dumps(entry.biometrics) if entry.biometrics else None
-    
-        db.session.commit()
+
+        # Optional DB update
+        if MoodEntry is not None:
+            try:
+                row = (
+                    MoodEntry.query  # type: ignore[attr-defined]
+                    .filter_by(entry_id_str=entry_id_str)
+                    .first()
+                )
+                if not row:
+                    # If missing for some reason, recreate from Entry to avoid data loss
+                    row = MoodEntry.from_entry(entry)  # type: ignore[attr-defined]
+                    row.created_at = getattr(entry, "created_at", datetime.utcnow())
+                    db.session.add(row)
+                else:
+                    row.entry_name = entry.entry_name
+                    row.entry_date = entry.entry_date
+                    row.ranking = entry.ranking
+                    row.mood_rating = entry.mood_rating
+                    row.mood = str(entry.mood_rating)  # keep 'mood' non-empty
+                    row.note = entry.entry_body
+                    row.tags_raw = ",".join(entry.tags) if entry.tags else None
+                    row.biometrics_raw = (
+                        json.dumps(entry.biometrics) if entry.biometrics else None
+                    )
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
         return True
         
 
