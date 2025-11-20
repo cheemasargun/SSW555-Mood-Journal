@@ -127,27 +127,15 @@ class Mood_Journal:
     #rewrote to work with database
     def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int):
          # Update in-memory Entry
-        entry = self.entries_dict.get(entry_id_str)
+       entry = self.entries_dict.get(entry_id_str)
         if not entry:
-            return False  # no such entry
-
-        entry.edit_entry(
-            new_name,
-            new_day,
-            new_month,
-            new_year,
-            new_body,
-            new_ranking,
-            new_mood_rating,
-        )
-
-        # Recompute streaks (date may have changed)
+            return False
+    
+        entry.edit_entry(...)
         self.recompute_streak()
-
-        # Update the corresponding DB row
+    
         row = MoodEntry.query.filter_by(entry_id_str=entry_id_str).first()
         if not row:
-            # If missing for some reason, recreate from Entry to avoid data loss
             row = MoodEntry.from_entry(entry)
             row.created_at = getattr(entry, "created_at", datetime.utcnow())
             db.session.add(row)
@@ -156,11 +144,11 @@ class Mood_Journal:
             row.entry_date = entry.entry_date
             row.ranking = entry.ranking
             row.mood_rating = entry.mood_rating
-            row.mood = str(entry.mood_rating)  # keep 'mood' non-empty
+            row.mood = str(entry.mood_rating)
             row.note = entry.entry_body
             row.tags_raw = ",".join(entry.tags) if entry.tags else None
             row.biometrics_raw = json.dumps(entry.biometrics) if entry.biometrics else None
-
+    
         db.session.commit()
         return True
         
