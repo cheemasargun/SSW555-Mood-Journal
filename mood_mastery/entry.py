@@ -37,19 +37,21 @@ class Entry:
     ranking = -999 # CMNT: this default value is for if we want to keep a numerical representation for rankings in the code
     is_private = None
     mood_rating = -999 # For US-20; rating from 1 (terrible/worst) to 100 (fantastic/best)
+    difficulty_ranking = -999 # For US-28; ranking from 1 (not a challenge at all) to 100 (impossible)
 
-    def __init__(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, mood_rating: int, tags=None, biometrics: Optional[Dict[str, str]] = None):
+    def __init__(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, mood_rating: int, difficulty_ranking: int, tags=None, biometrics: Optional[Dict[str, str]] = None):
         """
         Initializes the Entry instance with values for each attribute of the class.
 
         Parameters -------------------------
-        - entry_name : str      // The name assigned to a user's entry
-        - entry_day : int       // The day of a user's entry
-        - entry_month : int     // The month of a user's entry
-        - entry_year : int      // The year of a user's entry
-        - entry_body : str      // The body/main text of a user's entry
-        - ranking : int         // The ranking assigned to the entry by a user (TODO: describe valid range ^ see line 12)
-        - mood_rating: int      // The user's rating of their mood on the day/at the time of the entry (range of 1 to 100)
+        - entry_name : str          // The name assigned to a user's entry
+        - entry_day : int           // The day of a user's entry
+        - entry_month : int         // The month of a user's entry
+        - entry_year : int          // The year of a user's entry
+        - entry_body : str          // The body/main text of a user's entry
+        - ranking : int             // The ranking assigned to the entry by a user (TODO: describe valid range ^ see line 12)
+        - mood_rating: int          // The user's rating of their mood on the day/at the time of the entry (range of 1 to 100)
+        - difficulty_ranking: int   // The user's ranking of the difficulty of getting through the day (range of 1 to 100)
         """
         self.entry_id_str = str(uuid.uuid4()) # Generating a unique id for the entry
         self.entry_name = entry_name
@@ -65,25 +67,28 @@ class Entry:
         if biometrics:
             self.initialize_biometrics(biometrics)
         self.mood_rating = mood_rating
+        self.difficulty_ranking = difficulty_ranking
 
-    def edit_entry(self, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int):
+    def edit_entry(self, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int, new_difficulty_ranking: int):
         """
         Modifies the Entry instance's attributes.
 
         Parameters -------------------------
-        - new_name : str        // The updated name for the user's entry
-        - new_day : int         // The updated day for the user's entry
-        - new_month : int       // The updated month for the user's entry
-        - new_year : int        // The updated year for the user's entry
-        - new_body : str        // The updated body/main text of a user's story
-        - new_ranking : int     // The updated ranking assigned to the entry (TODO: describe valid range ^ see line 12)
-        - new_mood_rating: int  // The updated mood_rating assigned to the entry 
+        - new_name : str                // The updated name for the user's entry
+        - new_day : int                 // The updated day for the user's entry
+        - new_month : int               // The updated month for the user's entry
+        - new_year : int                // The updated year for the user's entry
+        - new_body : str                // The updated body/main text of a user's story
+        - new_ranking : int             // The updated ranking assigned to the entry (TODO: describe valid range ^ see line 12)
+        - new_mood_rating: int          // The updated mood_rating assigned to the entry 
+        - new_difficulty_ranking: int   // The updated difficulty_ranking assigned to the entry
         """
         self.entry_name = new_name
         self.entry_date = date(new_year, new_month, new_day)
         self.entry_body = new_body
         self.ranking = new_ranking
         self.mood_rating = new_mood_rating
+        self.difficulty_ranking = new_difficulty_ranking
 
     def initialize_biometrics(self, data: Dict[str, str]) -> None:
         """
