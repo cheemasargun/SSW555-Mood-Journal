@@ -73,24 +73,24 @@ class Mood_Journal:
         return self._to_date(e.entry_date)
         
     def mj_log_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int,
-                 entry_body: str, ranking: int, mood_rating: int, tags=None, biometrics=None) -> str:
+                 entry_body: str, ranking: int, mood_rating: int, difficulty_ranking: int, tags=None, biometrics=None) -> str:
         """
         Create an entry and update the streaks. Returns the new entry's id.
         """
-        entry_id = self.mj_create_entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, mood_rating, tags,biometrics)
+        entry_id = self.mj_create_entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, mood_rating, difficulty_ranking, tags, biometrics)
         new_entry = self.mj_get_entry(entry_id)
         self.update_streak(new_entry.entry_date)
         return entry_id
 
-    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, mood_rating: int, tags=None,biometrics=None):
-        new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, mood_rating, tags, biometrics)
+    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, mood_rating: int, difficulty_ranking: int, tags=None,biometrics=None):
+        new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, mood_rating, difficulty_ranking, tags, biometrics)
         new_entry_id = new_entry.entry_id_str
         self.entries_dict[new_entry_id] = new_entry
         self.recompute_streak()
         return new_entry_id
 
-    def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int):
-        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, new_mood_rating)
+    def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int, new_difficulty_ranking: int):
+        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, new_mood_rating, new_difficulty_ranking)
 
     def mj_delete_entry(self, entry_id_str: str):
         # I imagine this would search for an entry's unique id and remove it from the database.
