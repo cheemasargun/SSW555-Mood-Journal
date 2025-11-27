@@ -656,3 +656,92 @@ def test_mj_clear_all_data():
     mj.mj_clear_all_data()
     assert mj.entries_dict == {}
     print("clear all data Test Passed")
+
+def test_mj_mood_graph_trends():
+    mj = Mood_Journal()
+    id1 = mj.mj_create_entry("test", 11, 5, 2025, "test", 1, 40, 44)
+    id2 = mj.mj_create_entry("test", 11, 5, 2025, "test", 1, 60, 66)
+    id3 = mj.mj_create_entry("test", 11, 8, 2025, "test", 1, 40, 22)
+    id4 = mj.mj_create_entry("test", 11, 9, 2025, "test", 1, 20, 22)
+    id5 = mj.mj_create_entry("test", 12, 5, 2025, "test", 1, 60, 77)
+    id6 = mj.mj_create_entry("test", 3, 5, 2025, "test", 1, 10, 77)
+
+
+    trends = mj.mj_mood_graph_trends()
+
+    assert trends["happiest_day_of_week"] == ["Monday, Sunday", 50]
+    assert trends["saddest_day_of_week"] == ["Saturday", 10]
+    assert trends["happiest_time_of_month"] == ["Second third", 44]
+    assert trends["saddest_time_of_month"] == ["First third", 10]
+    assert trends["happiest_month_of_year"] == ["May", 42.5]
+    assert trends["saddest_month_of_year"] == ["September", 20]
+
+    print("Mood Graph Trends Test Passed")
+
+def test_mj_mood_graph_trends_single_entry():
+    mj = Mood_Journal()
+    id1 = mj.mj_create_entry("test", 1, 1, 2025, "test", 1, 50, 50)
+
+    trends = mj.mj_mood_graph_trends()
+
+    assert trends["happiest_day_of_week"] == ["Wednesday", 50]
+    assert trends["saddest_day_of_week"] == ["Wednesday", 50]
+    assert trends["happiest_time_of_month"] == ["First third", 50]
+    assert trends["saddest_time_of_month"] == ["First third", 50]
+    assert trends["happiest_month_of_year"] == ["January", 50]
+    assert trends["saddest_month_of_year"] == ["January", 50]
+
+    print("Mood Graph Trends Single Entry Test Passed")
+
+
+def test_mj_mood_graph_trends_empty_journal():
+    mj = Mood_Journal()
+    trends = mj.mj_mood_graph_trends()
+
+    assert trends["happiest_day_of_week"] == ["", 0]
+    assert trends["saddest_day_of_week"] == ["", 999]
+    assert trends["happiest_time_of_month"] == ["", 0]
+    assert trends["saddest_time_of_month"] == ["", 999]
+    assert trends["happiest_month_of_year"] == ["", 0]
+    assert trends["saddest_month_of_year"] == ["", 999]
+
+    print("Mood Graph Trends Empty Journal Test Passed")
+
+
+def test_mj_mood_graph_trends_multiple_entries_same_day():
+    mj = Mood_Journal()
+    id1 = mj.mj_create_entry("test", 5, 6, 2025, "test", 1, 30, 40)
+    id2 = mj.mj_create_entry("test", 5, 6, 2025, "test", 1, 70, 60)
+    id3 = mj.mj_create_entry("test", 5, 6, 2025, "test", 1, 50, 50)
+
+    trends = mj.mj_mood_graph_trends()
+
+    assert trends["happiest_day_of_week"] == ["Thursday", 50]
+    assert trends["saddest_day_of_week"] == ["Thursday", 50]
+    assert trends["happiest_time_of_month"] == ["First third", 50]
+    assert trends["saddest_time_of_month"] == ["First third", 50]
+    assert trends["happiest_month_of_year"] == ["June", 50]
+    assert trends["saddest_month_of_year"] == ["June", 50]
+
+    print("Mood Graph Trends Multiple Entries Same Day Test Passed")
+
+
+def test_mj_mood_graph_trends_cross_month():
+    mj = Mood_Journal()
+    mj.mj_create_entry("test", 15, 5, 2025, "test", 1, 20, 30)  # May, Thursday
+    mj.mj_create_entry("test", 20, 6, 2025, "test", 1, 50, 60)  # June, Friday
+    mj.mj_create_entry("test", 25, 7, 2025, "test", 1, 70, 80)  # July, Friday
+
+    trends = mj.mj_mood_graph_trends()
+
+    assert trends["happiest_day_of_week"][0] == "Friday"
+    assert trends["saddest_day_of_week"][0] == "Thursday"
+    assert trends["happiest_month_of_year"][0] == "July"
+    assert trends["saddest_month_of_year"][0] == "May"
+
+    assert trends["happiest_day_of_week"][1] == 60
+    assert trends["saddest_day_of_week"][1] == 20
+    assert trends["happiest_month_of_year"][1] == 70
+    assert trends["saddest_month_of_year"][1] == 20
+
+    print("Mood Graph Trends Cross Month Test Passed")

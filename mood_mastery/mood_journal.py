@@ -418,7 +418,152 @@ class Mood_Journal:
     def mj_clear_all_data(self):
         self.entries_dict.clear()
 
+    def mj_mood_graph_trends(self):
+        """
+        Returns a dictionary listing mood_rating trends:
+            - Weekly: (ON AVERAGE) on which day of the week the user's mood tends to be HIGHEST (HAPPIEST) and on which it tends to be LOWEST (SADDEST)
+            - Monthly: (ON AVERAGE) during which third of the month the user's mood tends to be HIGHEST (HAPPIEST) and during which third it tends to be LOWEST (SADDEST)
+            - Yearly: (ON AVERAGE) during which month the user's mood tends to be HIGHEST (HAPPIEST) and during which the user's mood tends to be LOWEST (SADDEST)
         
+        Dictionary format: { happiest_day_of_week (str)     : [ happiest_day_of_week (str), happiest_day_of_week_avg (float) ],
+                             saddest_day_of_week (str)      : [ saddest_day_of_week (str), saddest_day_of_week_avg (float) ],
+                             happiest_time_of_month (str)   : [ happiest_time_of_month (str), happiest_time_of_month_avg (float) ],
+                             saddest_time_of_month (str)    : [ saddest_time_of_month (str), saddest_time_of_month_avg (float) ],
+                             happiest_month_of_year (str)   : [ happiest_month_of_year (str), happiest_month_of_year_avg (float) ],
+                             saddest_month_of_year (str)    : [ saddest_month_of_year (str), saddest_month_of_year_avg (float) ],
+                            }
+            
+        Parameters -------------------------
+        (None)
+        """
+
+        mood_ratings_by_day_of_week = { "Monday": [], "Tuesday" : [], "Wednesday" : [],
+                                        "Thursday" : [], "Friday" : [], "Saturday" : [], "Sunday" : [] }
+        mood_ratings_by_time_of_month = { "First third" : [], "Second third" : [], "Last third": [] }
+        mood_ratings_by_month_of_year = { "January" : [], "February" : [], "March" : [],
+                                          "April" : [], "May" : [], "June" : [],
+                                          "July" : [], "August" : [], "September" : [],
+                                          "October" : [], "November" : [], "December" : [] }
+
+        # Sorting all entries by day of the week // day of the month range (1-10, 11-20, 20-onward) // month of the year
+        for entry in self.entries_dict.values():
+            entry_day_of_week_num = entry.entry_date.weekday() # 0 = Monday, ..., 6 = Sunday
+            entry_day_of_month = entry.entry_date.day
+            entry_month = entry.entry_date.month # 1 = January, ..., 12 = December
+
+            match entry_day_of_week_num:
+                case 0: mood_ratings_by_day_of_week["Monday"].append(entry.mood_rating)
+                case 1: mood_ratings_by_day_of_week["Tuesday"].append(entry.mood_rating)
+                case 2: mood_ratings_by_day_of_week["Wednesday"].append(entry.mood_rating)
+                case 3: mood_ratings_by_day_of_week["Thursday"].append(entry.mood_rating)
+                case 4: mood_ratings_by_day_of_week["Friday"].append(entry.mood_rating)
+                case 5: mood_ratings_by_day_of_week["Saturday"].append(entry.mood_rating)
+                case 6: mood_ratings_by_day_of_week["Sunday"].append(entry.mood_rating)
+
+            if entry_day_of_month < 11:
+                mood_ratings_by_time_of_month["First third"].append(entry.mood_rating)
+            elif entry_day_of_month < 21:
+                mood_ratings_by_time_of_month["Second third"].append(entry.mood_rating)
+            else:
+                mood_ratings_by_time_of_month["Last third"].append(entry.mood_rating)
+
+            match entry_month:
+                case 1: mood_ratings_by_month_of_year["January"].append(entry.mood_rating)
+                case 2: mood_ratings_by_month_of_year["February"].append(entry.mood_rating)
+                case 3: mood_ratings_by_month_of_year["March"].append(entry.mood_rating)
+                case 4: mood_ratings_by_month_of_year["April"].append(entry.mood_rating)
+                case 5: mood_ratings_by_month_of_year["May"].append(entry.mood_rating)
+                case 6: mood_ratings_by_month_of_year["June"].append(entry.mood_rating)
+                case 7: mood_ratings_by_month_of_year["July"].append(entry.mood_rating)
+                case 8: mood_ratings_by_month_of_year["August"].append(entry.mood_rating)
+                case 9: mood_ratings_by_month_of_year["September"].append(entry.mood_rating)
+                case 10: mood_ratings_by_month_of_year["October"].append(entry.mood_rating)
+                case 11: mood_ratings_by_month_of_year["November"].append(entry.mood_rating)
+                case 12: mood_ratings_by_month_of_year["December"].append(entry.mood_rating)
+                
+        mood_rating_day_of_week_avgs = { "Monday": 0, "Tuesday" : 0, "Wednesday" : 0,
+                                        "Thursday" : 0, "Friday" : 0, "Saturday" : 0, "Sunday" : 0 }
+        mood_ratings_time_of_month_avgs = { "First third" : 0, "Second third" : 0, "Last third": 0 }
+        mood_rating_month_of_year_avgs = { "January" : 0, "February" : 0, "March" : 0,
+                                          "April" : 0, "May" : 0, "June" : 0,
+                                          "July" : 0, "August" : 0, "September" : 0,
+                                          "October" : 0, "November" : 0, "December" : 0 }
         
+        # Calculating average mood rating for each day of the week
+        for day in mood_ratings_by_day_of_week.keys():
+            if len(mood_ratings_by_day_of_week[day]) != 0:
+                mood_rating_day_of_week_avgs[day] = sum(mood_ratings_by_day_of_week[day]) / len(mood_ratings_by_day_of_week[day])
 
+        # Calculating average mood rating for each day of the month range (1-10, 11-20, 20-onward)
+        for time_of_month in mood_ratings_by_time_of_month.keys():
+            if len(mood_ratings_by_time_of_month[time_of_month]) != 0:
+                mood_ratings_time_of_month_avgs[time_of_month] = sum(mood_ratings_by_time_of_month[time_of_month]) / len(mood_ratings_by_time_of_month[time_of_month])
 
+        # Calculating average mood rating for each month of the year
+        for month in mood_ratings_by_month_of_year.keys():
+            if len(mood_ratings_by_month_of_year[month]) != 0:
+                mood_rating_month_of_year_avgs[month] = sum(mood_ratings_by_month_of_year[month]) / len(mood_ratings_by_month_of_year[month])
+        
+        # Finding highest (happiest) and lowest (saddest) mood rating for each category
+        happiest_day_of_week_avg = 0
+        saddest_day_of_week_avg = 999
+        happiest_day_of_week = ""
+        saddest_day_of_week = ""
+        for day, avg in mood_rating_day_of_week_avgs.items():
+            if len(mood_ratings_by_day_of_week[day]) > 0:
+                if avg > happiest_day_of_week_avg:
+                    happiest_day_of_week_avg = avg
+                    happiest_day_of_week = day
+                elif avg == happiest_day_of_week_avg:
+                    happiest_day_of_week += ", " + day
+
+                if avg < saddest_day_of_week_avg:
+                    saddest_day_of_week_avg = avg
+                    saddest_day_of_week = day
+                elif avg == saddest_day_of_week_avg:
+                    saddest_day_of_week += ", " + day
+
+        happiest_time_of_month_avg = 0
+        saddest_time_of_month_avg = 999
+        happiest_time_of_month = ""
+        saddest_time_of_month = ""
+        for time_of_month, avg in mood_ratings_time_of_month_avgs.items():
+            if len(mood_ratings_by_time_of_month[time_of_month]) > 0:
+                if avg > happiest_time_of_month_avg:
+                    happiest_time_of_month_avg = avg
+                    happiest_time_of_month = time_of_month
+                elif avg == happiest_time_of_month_avg:
+                    happiest_time_of_month = happiest_time_of_month + ", " + time_of_month
+                
+                if avg < saddest_time_of_month_avg:
+                    saddest_time_of_month_avg = avg
+                    saddest_time_of_month = time_of_month
+                elif avg == saddest_time_of_month_avg:
+                    saddest_time_of_month = saddest_time_of_month + ", " + time_of_month
+                
+        happiest_month_of_year_avg = 0
+        saddest_month_of_year_avg = 999
+        happiest_month_of_year = ""
+        saddest_month_of_year = ""
+        for month_of_year, avg in mood_rating_month_of_year_avgs.items():
+            if len(mood_ratings_by_month_of_year[month_of_year]) > 0:
+                if avg > happiest_month_of_year_avg:
+                    happiest_month_of_year_avg = avg
+                    happiest_month_of_year = month_of_year
+                elif avg == happiest_month_of_year_avg:
+                    happiest_month_of_year = happiest_month_of_year + ", " + month_of_year
+                
+                if avg < saddest_month_of_year_avg:
+                    saddest_month_of_year_avg = avg
+                    saddest_month_of_year = month_of_year
+                elif avg == saddest_month_of_year_avg:
+                    saddest_month_of_year = saddest_month_of_year + ", " + month_of_year
+
+        mood_graph_trends = { "happiest_day_of_week" : [ happiest_day_of_week, happiest_day_of_week_avg ],
+                             "saddest_day_of_week" : [ saddest_day_of_week, saddest_day_of_week_avg ],
+                             "happiest_time_of_month" : [ happiest_time_of_month, happiest_time_of_month_avg ],
+                             "saddest_time_of_month" : [ saddest_time_of_month, saddest_time_of_month_avg ],
+                             "happiest_month_of_year" : [ happiest_month_of_year, happiest_month_of_year_avg ],
+                             "saddest_month_of_year" : [ saddest_month_of_year, saddest_month_of_year_avg ] }
+        
+        return mood_graph_trends
