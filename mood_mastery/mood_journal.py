@@ -57,7 +57,9 @@ class Mood_Journal:
         
     def _ensure_db_loaded(self, app=None):
         """Lazy load from database when needed"""
-        if not self.entries_dict and app:
+        if not self._db_loaded and self.use_database:
+        app = self._get_app()
+        if app:
             try:
                 with app.app_context():
                     db_entries = MoodEntry.query.all()
@@ -65,7 +67,7 @@ class Mood_Journal:
                         entry = db_entry.to_entry()
                         self.entries_dict[entry.entry_id_str] = entry
                     self.recompute_streak()
-                    self.db_loaded = True
+                    self._db_loaded = True
             except Exception as e:
                 print(f"Warning: Could not load from database: {e}")
                 
@@ -229,6 +231,8 @@ class Mood_Journal:
         """
         Recompute current/longest streak from all entries.
         """
+        entries = self.mj_get_all_entries()
+        
         if not entries:
             self.streak_current = 0
             self.streak_longest = 0
