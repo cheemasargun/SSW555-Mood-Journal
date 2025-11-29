@@ -35,7 +35,7 @@ import json
 from typing import Optional, Dict, List, Tuple
 
 class Mood_Journal:
-    def __init__(self):
+    def __init__(self, use_database=True):
         # TODO
         # This is likely where we'll try to get the database file/instance, or create one if it doesn't exist
         # we can work on this together to get it set up and then be able to create tests.
@@ -48,6 +48,7 @@ class Mood_Journal:
         self.streak_current = 0
         self.streak_longest = 0
         self.last_entry_date = None
+        self.use_database = use_database
         self._db_loaded = False
 
     def _get_app(self):
