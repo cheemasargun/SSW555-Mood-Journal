@@ -30,16 +30,12 @@ in entry.py and mood_journal.py
 from extensions import db
 from datetime import datetime, date, timedelta
 from mood_mastery.entry import Entry
+from models import MoodEntry
+import json
 from typing import Optional, Dict, List, Tuple
 
 class Mood_Journal:
-    # Attributes (TO BE UPDATED) (if we need attributes here, really)
-    entries_dict = {}
-    streak_current = 0
-    streak_longest = 0
-    last_entry_date : Optional[date] = None
-
-    def __init__(self):
+    def __init__(self, use_database=True):
         # TODO
         # This is likely where we'll try to get the database file/instance, or create one if it doesn't exist
         # we can work on this together to get it set up and then be able to create tests.
@@ -52,6 +48,84 @@ class Mood_Journal:
         self.streak_current = 0
         self.streak_longest = 0
         self.last_entry_date = None
+        self.use_database = use_database
+        self._db_loaded = False
+
+    def _get_app(self):
+        """Safely get the Flask app from db"""
+        return getattr(db, 'app', None)
+        
+    def _ensure_db_loaded(self, app=None):
+        """Lazy load from database when needed"""
+        if not self._db_loaded and self.use_database:
+            app = self._get_app()
+            if app:
+                try:
+                    with app.app_context():
+                        db_entries = MoodEntry.query.all()
+                        for db_entry in db_entries:
+                            entry = db_entry.to_entry()
+                            self.entries_dict[entry.entry_id_str] = entry
+                        self.recompute_streak()
+                        self._db_loaded = True
+                except Exception as e:
+                    print(f"Warning: Could not load from database: {e}")
+                
+    def _load_entries_from_db(self):
+        """Load all entries from database into memory"""
+        with db.app.app_context():  # Ensure app context
+            db_entries = MoodEntry.query.all()
+            for db_entry in db_entries:
+                entry = db_entry.to_entry()
+                self.entries_dict[entry.entry_id_str] = entry
+
+    def _save_entry_to_db(self, entry: Entry):
+        """Save to database only if enabled"""
+        if not self.use_database:
+            return
+            
+        app = self._get_app()
+        if app:
+            try:
+                with app.app_context():
+                    existing = MoodEntry.query.filter_by(entry_id_str=entry.entry_id_str).first()
+                    
+                    if existing:
+                        # Update existing
+                        existing.entry_name = entry.entry_name
+                        existing.entry_date = entry.entry_date
+                        existing.ranking = entry.ranking
+                        existing.mood_rating = entry.mood_rating
+                        existing.difficulty_ranking = getattr(entry, 'difficulty_ranking', 3)
+                        existing.entry_body = entry.entry_body
+                        existing.tags_raw = ",".join(entry.tags) if getattr(entry, "tags", None) else None
+                        existing.biometrics_raw = json.dumps(entry.biometrics) if getattr(entry, "biometrics", None) else None
+                        existing.is_private = getattr(entry, 'is_private', False)
+                    else:
+                        # Create new
+                        db_entry = MoodEntry.from_entry(entry)
+                        db.session.add(db_entry)
+                    
+                    db.session.commit()
+            except Exception as e:
+                print(f"Warning: Could not save to database: {e}")
+
+    def _delete_entry_from_db(self, entry_id_str: str):
+        """Delete from database only if enabled"""
+        if not self.use_database:
+            return
+            
+        app = self._get_app()
+        if app:
+            try:
+                with app.app_context():
+                    entry = MoodEntry.query.filter_by(entry_id_str=entry_id_str).first()
+                    if entry:
+                        db.session.delete(entry)
+                        db.session.commit()
+            except Exception as e:
+                print(f"Warning: Could not delete from database: {e}")
+
 
     def _to_date(self, d) -> date:
         """
@@ -86,11 +160,16 @@ class Mood_Journal:
         new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, mood_rating, difficulty_ranking, tags, biometrics)
         new_entry_id = new_entry.entry_id_str
         self.entries_dict[new_entry_id] = new_entry
+        self._save_entry_to_db(new_entry)
+        
         self.recompute_streak()
         return new_entry_id
 
     def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int, new_difficulty_ranking: int):
-        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, new_mood_rating, new_difficulty_ranking)
+        entry = self.entries_dict[entry_id_str]
+        entry.edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, new_mood_rating, new_difficulty_ranking)
+        # Update database if enabled
+        self._save_entry_to_db(entry)
 
     def mj_delete_entry(self, entry_id_str: str):
         # I imagine this would search for an entry's unique id and remove it from the database.
@@ -104,11 +183,13 @@ class Mood_Journal:
         # self.entries_dict // example of formatting: del my_dict[id]
 
         if entry_id_str in self.entries_dict:
+            # Delete from database if enabled
+            self._delete_entry_from_db(entry_id_str)
+            # Delete from memory
             del self.entries_dict[entry_id_str]
             self.recompute_streak()
             return True
-        else:
-            return False
+        return False
 
     def mj_get_entry(self, entry_id_str: str):
         """
@@ -120,8 +201,10 @@ class Mood_Journal:
         """
         if entry_id_str in self.entries_dict:
             return self.entries_dict[entry_id_str]
-        else:
-            return False # No such entry exists
+        
+        # If not found, try loading from database
+        self._ensure_db_loaded()
+        return self.entries_dict.get(entry_id_str, False)
         
     def mj_get_entry_privacy_status(self, entry_id_str: str):
         """
@@ -131,6 +214,7 @@ class Mood_Journal:
         Parameters -------------------------
         - entry_id_str : str        // The id of the Entry object the user wishes to search for
         """
+        self._ensure_db_loaded()
         if(self.mj_get_entry(entry_id_str) ==  False):
             return None # No such entry exists
         else:
@@ -139,6 +223,7 @@ class Mood_Journal:
         
     "Returns all the mood entries"
     def mj_get_all_entries(self):
+        self._ensure_db_loaded()
         return list(self.entries_dict.values())
     
     """Streak System"""
@@ -147,6 +232,7 @@ class Mood_Journal:
         Recompute current/longest streak from all entries.
         """
         entries = self.mj_get_all_entries()
+        
         if not entries:
             self.streak_current = 0
             self.streak_longest = 0
@@ -177,6 +263,7 @@ class Mood_Journal:
         self.streak_longest = longest
         
     def get_streak_summary(self):
+        self._ensure_db_loaded()
         return {
             "current_streak": self.streak_current,
             "longest_streak": self.streak_longest,
@@ -207,6 +294,7 @@ class Mood_Journal:
         self.recompute_streak()
 
     def mj_weekly_report(self, curr_day, curr_month, curr_year):
+        self._ensure_db_loaded()
         curr_date = date(curr_year, curr_month, curr_day)
         weekly_dates = []
 
@@ -230,6 +318,7 @@ class Mood_Journal:
             return emoji_count
     
     def mj_monthly_report(self, curr_day, curr_month, curr_year):
+        self._ensure_db_loaded()
         curr_date = date(curr_year, curr_month, curr_day)
         monthly_dates = []
 
@@ -256,6 +345,7 @@ class Mood_Journal:
         """
         UI selects a date → return entries for that date
         """
+        self._ensure_db_loaded()
         target = date(year, month, day)
         items = [e for e in self.entries_dict.values() if self._entry_date(e) == target]
     
@@ -270,6 +360,7 @@ class Mood_Journal:
         """
         Return all entries where start <= entry_date <= end, sorted by date then created_at.
         """
+        self._ensure_db_loaded()
         items = []
         for e in self.entries_dict.values():
             d = self._entry_date(e)
@@ -286,6 +377,7 @@ class Mood_Journal:
         """
         Calendar-friendly structure: {date: [entries...]}, including empty days in range.
         """
+        self._ensure_db_loaded()
         # all days start with empty lists so the UI can render blanks for no-entry dates
         days: Dict[date, List[Entry]] = {}
         cur = start
@@ -310,6 +402,7 @@ class Mood_Journal:
         """
         give the whole visible month grid (from the calendar’s first weekday to last).
         """
+        self._ensure_db_loaded()
         # First of month
         first = date(year, month, 1)
         # Start on Monday (ISO) for backend; align with UI if it uses Sunday
@@ -340,6 +433,7 @@ class Mood_Journal:
         - start_date : date         // The beginning of the time period the user wants to see their mood_ratings for
         - end_date : date           // The ending of the time period the user wants to see their mood_ratings for
         """
+        self._ensure_db_loaded()
         entries_grouped_by_day = self.mj_entries_grouped_by_day(start_date, end_date)
         
         rating_graph_info = {}
@@ -372,6 +466,7 @@ class Mood_Journal:
     #Organize tags 
     def mj_all_tags(self):
         """Returns sorted list of all unique tags"""
+        self._ensure_db_loaded()
         tag_set: set[str] = set()
         for e in self.entries_dict.values():
             # Entry.tags is already cleaned (lowercased, stripped) by Entry.add_tag
@@ -380,6 +475,7 @@ class Mood_Journal:
         return sorted(tag_set)
     def mj_entries_with_tag(self, tag):
         """Returns all entries with given tag sorted by date and name"""
+        self._ensure_db_loaded()
         items: list[Entry] = []
         for e in self.entries_dict.values():
             if e.has_tag(tag):
@@ -394,6 +490,7 @@ class Mood_Journal:
         return items
     def mj_tag_summary(self):
         """Returns a list of  pairs summarizing how often a tag is used"""
+        self._ensure_db_loaded()
         counts: dict[str, int] = {}
         for e in self.entries_dict.values():
             for t in getattr(e, "tags", []):
@@ -405,6 +502,7 @@ class Mood_Journal:
     #takes into account ranking(emoji), mood rating(scale from 1-100)
     def mj_emoji_groups(self, emoji):
         #creates a list with the keys of every entry that has a given emoji
+        self._ensure_db_loaded()
         keys = []
         ratingCount = [0] * 100
 
@@ -417,6 +515,18 @@ class Mood_Journal:
     
     def mj_clear_all_data(self):
         self.entries_dict.clear()
+        if self.use_database:
+            app = self._get_app()
+            if app:
+                try:
+                    with app.app_context():
+                        MoodEntry.query.delete()
+                        db.session.commit()
+                except Exception as e:
+                    print(f"Warning: Could not clear database: {e}")
+        self.streak_current = 0
+        self.streak_longest = 0
+        self.last_entry_date = None
 
     def mj_mood_graph_trends(self):
         """
@@ -436,7 +546,7 @@ class Mood_Journal:
         Parameters -------------------------
         (None)
         """
-
+        self._ensure_db_loaded()
         mood_ratings_by_day_of_week = { "Monday": [], "Tuesday" : [], "Wednesday" : [],
                                         "Thursday" : [], "Friday" : [], "Saturday" : [], "Sunday" : [] }
         mood_ratings_by_time_of_month = { "First third" : [], "Second third" : [], "Last third": [] }

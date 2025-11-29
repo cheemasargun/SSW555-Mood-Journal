@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 from extensions import db
+from models import MoodEntry
 
 from flask import (
     Flask,
@@ -19,8 +20,11 @@ app.config["SECRET_KEY"] = "dev-key"  # TODO: replace with env var in real deplo
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
+
+with app.app_context():
+    db.create_all()
 # In-memory journal instance
-mj = Mood_Journal()
+mj = Mood_Journal(use_database=True)
 
 # ----------------- THEME CONFIG -----------------
 
@@ -187,9 +191,9 @@ def _tag_context(selected_tag: str | None = None) -> dict:
 
 @app.route("/")
 def index():
-    entries = _sorted_entries()
+    entries = mj.mj_get_all_entries(app=app)
     today = date.today()
-    summary = _streak_summary_for_ui()
+    summary = mj.get_streak_summary(app=app)
     tag_ctx = _tag_context()
 
     return render_template(
