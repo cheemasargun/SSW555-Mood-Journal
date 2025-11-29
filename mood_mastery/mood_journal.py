@@ -48,8 +48,23 @@ class Mood_Journal:
         self.streak_current = 0
         self.streak_longest = 0
         self.last_entry_date = None
-        self._load_entries_from_db()
-
+        self._db_loaded = False
+        
+    def _ensure_db_loaded(self, app=None):
+        """Lazy load from database when needed"""
+        if not self.entries_dict and app:
+            try:
+                with app.app_context():
+                    db_entries = MoodEntry.query.all()
+                    for db_entry in db_entries:
+                        entry = db_entry.to_entry()
+                        self.entries_dict[entry.entry_id_str] = entry
+                    self.recompute_streak()
+                    self.db_loaded = True
+                    print("loaded entries from database")
+            except Exception as e:
+                print(f"Warning: Could not load from database: {e}")
+                
     def _load_entries_from_db(self):
         """Load all entries from database into memory"""
         with db.app.app_context():  # Ensure app context
@@ -130,11 +145,13 @@ class Mood_Journal:
         return new_entry_id
 
     def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int, new_difficulty_ranking: int):
+        self._ensure_db_loaded(app)  # ← ADD THIS
         entry = self.entries_dict[entry_id_str]
-        entry.edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, new_mood_rating, new_difficulty_ranking)
+        entry.edit_entry(new_name, new_day, new_month, new_year, new_body, 
+                        new_ranking, new_mood_rating, new_difficulty_ranking)
         # Update database
-        self._save_entry_to_db(entry)
-
+        if app:
+            self._save_entry_to_db(entry, app)
 
     def mj_delete_entry(self, entry_id_str: str):
         # I imagine this would search for an entry's unique id and remove it from the database.
@@ -147,7 +164,10 @@ class Mood_Journal:
         # In the meantime: use the del statement to delete the entry of the given entry_id from
         # self.entries_dict // example of formatting: del my_dict[id]
 
+        self._ensure_db_loaded(app)  # ← ADD THIS
         if entry_id_str in self.entries_dict:
+            if app:
+                self._delete_entry_from_db(entry_id_str, app)
             del self.entries_dict[entry_id_str]
             self.recompute_streak()
             return True
@@ -162,6 +182,7 @@ class Mood_Journal:
         Parameters -------------------------
         - entry_id_str : str        // The id of the Entry object the user wishes to search for
         """
+        self._ensure_db_loaded(app)
         if entry_id_str in self.entries_dict:
             return self.entries_dict[entry_id_str]
         else:
@@ -175,6 +196,7 @@ class Mood_Journal:
         Parameters -------------------------
         - entry_id_str : str        // The id of the Entry object the user wishes to search for
         """
+        self._ensure_db_loaded(app)
         if(self.mj_get_entry(entry_id_str) ==  False):
             return None # No such entry exists
         else:
@@ -183,6 +205,7 @@ class Mood_Journal:
         
     "Returns all the mood entries"
     def mj_get_all_entries(self):
+        self._ensure_db_loaded(app)
         return list(self.entries_dict.values())
     
     """Streak System"""
@@ -221,6 +244,7 @@ class Mood_Journal:
         self.streak_longest = longest
         
     def get_streak_summary(self):
+        self._ensure_db_loaded(app)
         return {
             "current_streak": self.streak_current,
             "longest_streak": self.streak_longest,
@@ -251,6 +275,7 @@ class Mood_Journal:
         self.recompute_streak()
 
     def mj_weekly_report(self, curr_day, curr_month, curr_year):
+        self._ensure_db_loaded(app)
         curr_date = date(curr_year, curr_month, curr_day)
         weekly_dates = []
 
@@ -274,6 +299,7 @@ class Mood_Journal:
             return emoji_count
     
     def mj_monthly_report(self, curr_day, curr_month, curr_year):
+        self._ensure_db_loaded(app)
         curr_date = date(curr_year, curr_month, curr_day)
         monthly_dates = []
 
@@ -300,6 +326,7 @@ class Mood_Journal:
         """
         UI selects a date → return entries for that date
         """
+        self._ensure_db_loaded(app)
         target = date(year, month, day)
         items = [e for e in self.entries_dict.values() if self._entry_date(e) == target]
     
@@ -314,6 +341,7 @@ class Mood_Journal:
         """
         Return all entries where start <= entry_date <= end, sorted by date then created_at.
         """
+        self._ensure_db_loaded(app)
         items = []
         for e in self.entries_dict.values():
             d = self._entry_date(e)
@@ -330,6 +358,7 @@ class Mood_Journal:
         """
         Calendar-friendly structure: {date: [entries...]}, including empty days in range.
         """
+        self._ensure_db_loaded(app)
         # all days start with empty lists so the UI can render blanks for no-entry dates
         days: Dict[date, List[Entry]] = {}
         cur = start
@@ -354,6 +383,7 @@ class Mood_Journal:
         """
         give the whole visible month grid (from the calendar’s first weekday to last).
         """
+        self._ensure_db_loaded(app)
         # First of month
         first = date(year, month, 1)
         # Start on Monday (ISO) for backend; align with UI if it uses Sunday
@@ -438,6 +468,7 @@ class Mood_Journal:
         return items
     def mj_tag_summary(self):
         """Returns a list of  pairs summarizing how often a tag is used"""
+        self._ensure_db_loaded(app)
         counts: dict[str, int] = {}
         for e in self.entries_dict.values():
             for t in getattr(e, "tags", []):
@@ -460,7 +491,18 @@ class Mood_Journal:
         return ratingCount, keys
     
     def mj_clear_all_data(self):
-        self.entries_dict.clear()
+        self._ensure_db_loaded(app)
+        if app:
+            try:
+                with app.app_context():
+                    MoodEntry.query.delete()
+                    db.session.commit()
+            except Exception as e:
+                print(f"Warning: Could not clear database: {e}")
+        self.streak_current = 0
+        self.streak_longest = 0
+        self.last_entry_date = None
+        self._db_loaded = True  # Mark as loaded (even though it's empty)
 
     def mj_mood_graph_trends(self):
         """
