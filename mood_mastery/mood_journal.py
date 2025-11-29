@@ -30,15 +30,11 @@ in entry.py and mood_journal.py
 from extensions import db
 from datetime import datetime, date, timedelta
 from mood_mastery.entry import Entry
+from models import MoodEntry
+import json
 from typing import Optional, Dict, List, Tuple
 
 class Mood_Journal:
-    # Attributes (TO BE UPDATED) (if we need attributes here, really)
-    entries_dict = {}
-    streak_current = 0
-    streak_longest = 0
-    last_entry_date : Optional[date] = None
-
     def __init__(self):
         # TODO
         # This is likely where we'll try to get the database file/instance, or create one if it doesn't exist
@@ -52,6 +48,48 @@ class Mood_Journal:
         self.streak_current = 0
         self.streak_longest = 0
         self.last_entry_date = None
+        self._load_entries_from_db()
+
+    def _load_entries_from_db(self):
+        """Load all entries from database into memory"""
+        with db.app.app_context():  # Ensure app context
+            db_entries = MoodEntry.query.all()
+            for db_entry in db_entries:
+                entry = db_entry.to_entry()
+                self.entries_dict[entry.entry_id_str] = entry
+
+    def _save_entry_to_db(self, entry: Entry):
+        """Save or update an entry in the database"""
+        with db.app.app_context():
+            # Check if entry already exists
+            existing = MoodEntry.query.filter_by(entry_id_str=entry.entry_id_str).first()
+            
+            if existing:
+                # Update existing entry
+                existing.entry_name = entry.entry_name
+                existing.entry_date = entry.entry_date
+                existing.ranking = entry.ranking
+                existing.mood_rating = entry.mood_rating
+                existing.difficulty_ranking = getattr(entry, 'difficulty_ranking', 3)
+                existing.entry_body = entry.entry_body
+                existing.tags_raw = ",".join(entry.tags) if getattr(entry, "tags", None) else None
+                existing.biometrics_raw = json.dumps(entry.biometrics) if getattr(entry, "biometrics", None) else None
+                existing.is_private = getattr(entry, 'is_private', False)
+            else:
+                # Create new entry
+                db_entry = MoodEntry.from_entry(entry)
+                db.session.add(db_entry)
+            
+            db.session.commit()
+
+    def _delete_entry_from_db(self, entry_id_str: str):
+        """Delete an entry from the database"""
+        with db.app.app_context():
+            entry = MoodEntry.query.filter_by(entry_id_str=entry_id_str).first()
+            if entry:
+                db.session.delete(entry)
+                db.session.commit()
+
 
     def _to_date(self, d) -> date:
         """
@@ -86,11 +124,17 @@ class Mood_Journal:
         new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, mood_rating, difficulty_ranking, tags, biometrics)
         new_entry_id = new_entry.entry_id_str
         self.entries_dict[new_entry_id] = new_entry
+        self._save_entry_to_db(new_entry)
+        
         self.recompute_streak()
         return new_entry_id
 
     def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int, new_difficulty_ranking: int):
-        (self.entries_dict[entry_id_str]).edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, new_mood_rating, new_difficulty_ranking)
+        entry = self.entries_dict[entry_id_str]
+        entry.edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, new_mood_rating, new_difficulty_ranking)
+        # Update database
+        self._save_entry_to_db(entry)
+
 
     def mj_delete_entry(self, entry_id_str: str):
         # I imagine this would search for an entry's unique id and remove it from the database.
