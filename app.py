@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 from extensions import db
+from models import MoodEntry
 
 from flask import (
     Flask,
@@ -19,6 +20,9 @@ app.config["SECRET_KEY"] = "dev-key"  # TODO: replace with env var in real deplo
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
+
+with app.app_context():
+    db.create_all()
 # In-memory journal instance
 mj = Mood_Journal()
 
