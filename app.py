@@ -191,9 +191,9 @@ def _tag_context(selected_tag: str | None = None) -> dict:
 
 @app.route("/")
 def index():
-    entries = _sorted_entries()
+    entries = mj.mj_get_all_entries(app=app)
     today = date.today()
-    summary = _streak_summary_for_ui()
+    summary = mj.get_streak_summary(app=app)
     tag_ctx = _tag_context()
 
     return render_template(
