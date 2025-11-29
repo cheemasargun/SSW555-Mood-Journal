@@ -58,18 +58,18 @@ class Mood_Journal:
     def _ensure_db_loaded(self, app=None):
         """Lazy load from database when needed"""
         if not self._db_loaded and self.use_database:
-        app = self._get_app()
-        if app:
-            try:
-                with app.app_context():
-                    db_entries = MoodEntry.query.all()
-                    for db_entry in db_entries:
-                        entry = db_entry.to_entry()
-                        self.entries_dict[entry.entry_id_str] = entry
-                    self.recompute_streak()
-                    self._db_loaded = True
-            except Exception as e:
-                print(f"Warning: Could not load from database: {e}")
+            app = self._get_app()
+            if app:
+                try:
+                    with app.app_context():
+                        db_entries = MoodEntry.query.all()
+                        for db_entry in db_entries:
+                            entry = db_entry.to_entry()
+                            self.entries_dict[entry.entry_id_str] = entry
+                        self.recompute_streak()
+                        self._db_loaded = True
+                except Exception as e:
+                    print(f"Warning: Could not load from database: {e}")
                 
     def _load_entries_from_db(self):
         """Load all entries from database into memory"""
