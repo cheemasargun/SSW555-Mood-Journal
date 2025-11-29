@@ -24,7 +24,7 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 # In-memory journal instance
-mj = Mood_Journal()
+mj = Mood_Journal(use_database=True)
 
 # ----------------- THEME CONFIG -----------------
 
