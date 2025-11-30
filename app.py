@@ -882,7 +882,7 @@ def emoji_group_detail(emoji_rank):
 def clear_all_data():
     """Clear all journal entries"""
     password = request.form.get("password", "").strip()
-    if password != "confirm":
+    if password != "confirm":  
         flash("Please type 'confirm' in the password field to clear all data.", "error")
         return redirect(url_for("index"))
 
