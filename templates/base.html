@@ -1,14 +1,14 @@
 <!doctype html>
-<html lang="en" class="h-full">
+<html lang="en" class="h-full" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>{% block title %}Mood Journal – Demo{% endblock %}</title>
+  <title>{% block title %}Mood Journal{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
     :root {
-      /* From app.py via context_processor */
+      /* From app.py via context_processor (accent colors etc.) */
       --mj-accent: {{ current_theme.accent }};
       --mj-accent-soft: {{ current_theme.accent_soft }};
       --mj-bg: {{ current_theme.bg }};
@@ -16,6 +16,9 @@
       --mj-card: {{ current_theme.card }};
     }
 
+    /**********************
+     * DARK MODE (default)
+     **********************/
     body {
       background-color: rgb(var(--mj-bg));
       color: #e5e7eb; /* slate-200 */
@@ -92,32 +95,120 @@
     .float-animation {
       animation: float 4s ease-in-out infinite;
     }
+
     button,
-  a {
-    transition:
-      background-color 0.18s ease,
-      color 0.18s ease,
-      border-color 0.18s ease,
-      transform 0.18s ease;
-  }
+    a {
+      transition:
+        background-color 0.18s ease,
+        color 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.18s ease;
+    }
 
-  button:hover,
-  a.mj-accent-btn:hover {
-    transform: translateY(-0.5px);
-  }
+    button:hover,
+    a.mj-accent-btn:hover {
+      transform: translateY(-0.5px);
+    }
 
-  .mj-accent-btn {
-    background-color: rgb(var(--mj-accent));
-    color: #f9fafb;
-  }
+    .mj-accent-btn {
+      background-color: rgb(var(--mj-accent));
+      color: #f9fafb;
+    }
 
-  .mj-accent-btn:hover {
-    background-color: rgb(var(--mj-accent)); 
-    filter: brightness(1.03);                
-  }
+    .mj-accent-btn:hover {
+      background-color: rgb(var(--mj-accent));
+      filter: brightness(1.03);
+    }
+
+    /**********************
+     * LIGHT MODE OVERRIDES
+     * (via [data-theme="light"])
+     **********************/
+    [data-theme="light"] body {
+      background-color: #f3f4f6; /* slate-100 */
+      color: #0f172a; /* slate-900 */
+    }
+
+    [data-theme="light"] .mj-shell {
+      background:
+        radial-gradient(circle at top left,
+          rgba(var(--mj-accent-soft), 0.25),
+          transparent 55%);
+    }
+
+    [data-theme="light"] .mj-card {
+      background-color: #ffffff;
+      border-color: rgba(148, 163, 184, 0.7); /* slate-400 */
+    }
+
+    [data-theme="light"] .mj-card-soft {
+      background-color: #f9fafb; /* slate-50 */
+      border-color: rgba(148, 163, 184, 0.5);
+    }
+
+    [data-theme="light"] header {
+      background-color: rgba(255, 255, 255, 0.9);
+      border-color: rgba(148, 163, 184, 0.6);
+    }
+
+    [data-theme="light"] .mj-accent-pill {
+      color: #0f172a;
+    }
+
+    [data-theme="light"] .mj-accent-badge {
+      color: #0f172a;
+    }
+
+    /* Make "dark-text" tailwind utilities readable on light bg */
+    [data-theme="light"] .text-slate-50,
+    [data-theme="light"] .text-slate-100,
+    [data-theme="light"] .text-slate-200 {
+      color: #0f172a !important; /* slate-900 */
+    }
+
+    [data-theme="light"] .text-slate-300,
+    [data-theme="light"] .text-slate-400 {
+      color: #4b5563 !important; /* slate-600 */
+    }
+
+    [data-theme="light"] .text-slate-500,
+    [data-theme="light"] .text-slate-600 {
+      color: #6b7280 !important; /* slate-500 */
+    }
+
+    [data-theme="light"] .bg-slate-900,
+    [data-theme="light"] .bg-slate-900\/60,
+    [data-theme="light"] .bg-slate-900\/70,
+    [data-theme="light"] .bg-slate-950\/80 {
+      background-color: #ffffff !important;
+    }
+
+    [data-theme="light"] .bg-slate-800,
+    [data-theme="light"] .bg-slate-700 {
+      background-color: #e5e7eb !important; /* slate-200 */
+    }
+
+    [data-theme="light"] .border-slate-800,
+    [data-theme="light"] .border-slate-800\/70,
+    [data-theme="light"] .border-slate-700 {
+      border-color: rgba(148, 163, 184, 0.7) !important;
+    }
+
+    [data-theme="light"] .bg-slate-900.rounded-full {
+      background-color: #e5e7eb !important;
+    }
+
+    /* Danger (rose) + success (emerald) look ok on light bg */
+    [data-theme="light"] .bg-rose-900\/40 {
+      background-color: rgba(248, 113, 113, 0.12) !important;
+    }
+    [data-theme="light"] .bg-emerald-900\/40 {
+      background-color: rgba(16, 185, 129, 0.12) !important;
+    }
   </style>
 
   <script>
+    // Modal helpers
     function openModal(id) {
       const el = document.getElementById(id);
       if (!el) return;
@@ -127,6 +218,38 @@
       const el = document.getElementById(id);
       if (!el) return;
       el.classList.add('hidden');
+    }
+
+    // ---- Dark / Light mode ----
+    (function () {
+      const root = document.documentElement;
+      const saved = localStorage.getItem('mj-theme-mode');
+
+      if (saved === 'light' || saved === 'dark') {
+        root.setAttribute('data-theme', saved);
+      }
+
+      // Update label on load
+      window.addEventListener('DOMContentLoaded', () => {
+        const label = document.getElementById('modeLabel');
+        const current = root.getAttribute('data-theme') || 'dark';
+        if (label) {
+          label.textContent = current === 'dark' ? 'Dark' : 'Light';
+        }
+      });
+    })();
+
+    function toggleMode() {
+      const root = document.documentElement;
+      const current = root.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      localStorage.setItem('mj-theme-mode', next);
+
+      const label = document.getElementById('modeLabel');
+      if (label) {
+        label.textContent = next === 'dark' ? 'Dark' : 'Light';
+      }
     }
   </script>
 
@@ -167,7 +290,7 @@
                 Mood Graph
               </a>
               <a href="{{ url_for('emoji_groups') }}"
-                class="px-2 py-1 rounded-lg border border-slate-700 text-slate-200 hover:text-white hover:border-slate-500">
+                 class="px-2 py-1 rounded-lg border border-slate-700 text-slate-200 hover:text-white hover:border-slate-500">
                 Emoji Groups
               </a>
               <button onclick="openModal('clearDataModal')"
@@ -176,22 +299,33 @@
               </button>
             </nav>
 
-            <!-- Theme picker -->
-            <form method="post" action="{{ url_for('set_theme') }}"
-                  class="flex items-center gap-2 text-xs">
-              <label for="theme" class="text-slate-400 hidden sm:inline">Theme</label>
-              <select id="theme" name="theme"
-                      class="bg-slate-900/70 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100">
-                {% for key, t in theme_choices.items() %}
-                  <option value="{{ key }}" {% if key == current_theme_key %}selected{% endif %}>
-                    {{ t.label }}
-                  </option>
-                {% endfor %}
-              </select>
-              <button class="mj-accent-btn px-2 py-1 rounded-lg text-[11px]" type="submit">
-                Apply
+            <!-- Right side: Theme picker + Dark/Light toggle -->
+            <div class="flex items-center gap-3">
+              <!-- Dark / Light toggle -->
+              <button type="button"
+                      onclick="toggleMode()"
+                      class="px-2 py-1 rounded-lg border border-slate-700 text-slate-200 hover:text-white hover:border-slate-500 text-xs flex items-center gap-1">
+                <span id="modeLabel">Dark</span>
+                <span>mode</span>
               </button>
-            </form>
+
+              <!-- Color theme picker (your existing theme system) -->
+              <form method="post" action="{{ url_for('set_theme') }}"
+                    class="flex items-center gap-2 text-xs">
+                <label for="theme" class="text-slate-400 hidden sm:inline">Theme</label>
+                <select id="theme" name="theme"
+                        class="bg-slate-900/70 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100">
+                  {% for key, t in theme_choices.items() %}
+                    <option value="{{ key }}" {% if key == current_theme_key %}selected{% endif %}>
+                      {{ t.label }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button class="mj-accent-btn px-2 py-1 rounded-lg text-[11px]" type="submit">
+                  Apply
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       </header>

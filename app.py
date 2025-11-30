@@ -756,9 +756,7 @@ def clear_all_data():
     """Clear all journal entries"""
     # Add confirmation password for safety
     password = request.form.get("password", "").strip()
-
-    # Simple confirmation - you might want to make this more secure
-    if password != "confirm":  # Change this to a more secure check if needed
+    if password != "confirm":  
         flash("Please type 'confirm' in the password field to clear all data.", "error")
         return redirect(url_for("index"))
 
