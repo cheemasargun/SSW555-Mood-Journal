@@ -16,13 +16,14 @@ from mood_mastery.mood_journal import Mood_Journal
 from mood_mastery.entry import BIOMETRICS, Entry
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "dev-key"  # TODO: replace with env var in real deployment
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config["SECRET_KEY"] = "dev-key"
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
 with app.app_context():
     db.create_all()
+
 # In-memory journal instance
 mj = Mood_Journal(use_database=True)
 
@@ -95,7 +96,8 @@ def ranking_emoji(r: int) -> str:
     Convenience wrapper so templates can call ranking_emoji(r).
     Uses Entry.determine_ranking_emoji internally.
     """
-    tmp = Entry("tmp", 1, 1, 2000, "", r, 50)
+    # name, day, month, year, body, ranking, mood_rating, difficulty_ranking
+    tmp = Entry("tmp", 1, 1, 2000, "", r, 50, 1)
     return tmp.determine_ranking_emoji()
 
 
@@ -167,7 +169,7 @@ def _tag_context(selected_tag: str | None = None) -> dict:
     all_tags = mj.mj_all_tags()
     tag_summary = mj.mj_tag_summary()
 
-    # tag can come from argument or query param ?tag=...
+    # tag can come from argument or query param
     tag_param = selected_tag or request.args.get("tag", "").strip()
     tag_entries = None
     norm_tag = None
@@ -191,9 +193,9 @@ def _tag_context(selected_tag: str | None = None) -> dict:
 
 @app.route("/")
 def index():
-    entries = mj.mj_get_all_entries(app=app)
+    entries = _sorted_entries()
     today = date.today()
-    summary = mj.get_streak_summary(app=app)
+    summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
 
     return render_template(
@@ -228,6 +230,14 @@ def add_entry():
         mood_rating = 50
     mood_rating = max(1, min(100, mood_rating))
 
+    # Difficulty ranking (user-provided, 1–5)
+    difficulty_raw = request.form.get("difficulty_ranking", "").strip()
+    try:
+        difficulty_ranking = int(difficulty_raw)
+    except ValueError:
+        difficulty_ranking = 3
+    difficulty_ranking = max(1, min(5, difficulty_ranking))
+
     # Tags
     tags_str = request.form.get("tags", "")
     tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else None
@@ -247,6 +257,7 @@ def add_entry():
         body,
         ranking,
         mood_rating,
+        difficulty_ranking,
         tags=tags,
         biometrics=biometrics if biometrics else None,
     )
@@ -370,6 +381,13 @@ def edit_entry_save(entry_id):
         mood_rating = e.mood_rating
     mood_rating = max(1, min(100, mood_rating))
 
+    difficulty_raw = request.form.get("difficulty_ranking", "").strip()
+    try:
+        difficulty_ranking = int(difficulty_raw)
+    except ValueError:
+        difficulty_ranking = getattr(e, "difficulty_ranking", 3)
+    difficulty_ranking = max(1, min(5, difficulty_ranking))
+
     mj.mj_edit_entry(
         entry_id,
         title,
@@ -379,6 +397,7 @@ def edit_entry_save(entry_id):
         body,
         ranking,
         mood_rating,
+        difficulty_ranking,
     )
     flash("Entry updated ✅", "success")
     return redirect(url_for("index"))
@@ -607,18 +626,20 @@ def mood_graph():
         **tag_ctx,
     )
 
+
 # ---------- Emoji Groups Report ----------
+
 
 @app.get("/emoji-groups")
 def emoji_groups():
     """Show all emoji groups with distribution"""
     emoji_data = {}
-    
+
     # Get data for all emojis (1-5 rankings)
     for emoji_rank in range(1, 6):
         rating_count, entry_keys = mj.mj_emoji_groups(emoji_rank)
         total_entries = sum(rating_count)
-        
+
         # Only include emojis that have entries
         if total_entries > 0:
             # Create distribution bars
@@ -627,17 +648,19 @@ def emoji_groups():
                 count = rating_count[rating]
                 if count > 0:
                     pct = (count / total_entries) * 100
-                    distribution.append({
-                        'rating': rating + 1,
-                        'count': count,
-                        'pct': round(pct, 1)
-                    })
-            
+                    distribution.append(
+                        {
+                            "rating": rating + 1,
+                            "count": count,
+                            "pct": round(pct, 1),
+                        }
+                    )
+
             emoji_data[emoji_rank] = {
-                'emoji': ranking_emoji(emoji_rank),
-                'total_entries': total_entries,
-                'distribution': distribution,
-                'entry_keys': entry_keys
+                "emoji": ranking_emoji(emoji_rank),
+                "total_entries": total_entries,
+                "distribution": distribution,
+                "entry_keys": entry_keys,
             }
 
     entries = _sorted_entries()
@@ -669,7 +692,7 @@ def emoji_group_detail(emoji_rank):
 
     rating_count, entry_keys = mj.mj_emoji_groups(emoji_rank)
     total_entries = sum(rating_count)
-    
+
     if total_entries == 0:
         flash(f"No entries found for {ranking_emoji(emoji_rank)} emoji.", "error")
         return redirect(url_for("emoji_groups"))
@@ -680,21 +703,23 @@ def emoji_group_detail(emoji_rank):
         entry = mj.mj_get_entry(key)
         if entry:
             emoji_entries.append(entry)
-    
+
     # Sort entries by date (newest first)
     emoji_entries.sort(key=lambda e: e.entry_date, reverse=True)
-    
+
     # Create distribution data
     distribution = []
     for rating in range(100):
         count = rating_count[rating]
         if count > 0:
             pct = (count / total_entries) * 100
-            distribution.append({
-                'rating': rating + 1,
-                'count': count,
-                'pct': round(pct, 1)
-            })
+            distribution.append(
+                {
+                    "rating": rating + 1,
+                    "count": count,
+                    "pct": round(pct, 1),
+                }
+            )
 
     entries = _sorted_entries()
     today = date.today()
@@ -708,11 +733,11 @@ def emoji_group_detail(emoji_rank):
         summary=summary,
         password_set=(ENTRY_PASSWORD is not None),
         emoji_group_detail={
-            'rank': emoji_rank,
-            'emoji': ranking_emoji(emoji_rank),
-            'total_entries': total_entries,
-            'distribution': distribution,
-            'emoji_entries': emoji_entries
+            "rank": emoji_rank,
+            "emoji": ranking_emoji(emoji_rank),
+            "total_entries": total_entries,
+            "distribution": distribution,
+            "emoji_entries": emoji_entries,
         },
         open_emoji_group_detail_modal=True,
         open_emoji_groups_modal=False,
@@ -722,22 +747,25 @@ def emoji_group_detail(emoji_rank):
         **tag_ctx,
     )
 
+
 # ---------- Data Management ----------
+
 
 @app.post("/clear-all-data")
 def clear_all_data():
     """Clear all journal entries"""
     # Add confirmation password for safety
     password = request.form.get("password", "").strip()
-    
+
     # Simple confirmation - you might want to make this more secure
     if password != "confirm":  # Change this to a more secure check if needed
         flash("Please type 'confirm' in the password field to clear all data.", "error")
         return redirect(url_for("index"))
-    
+
     mj.mj_clear_all_data()
     flash("All data has been cleared.", "success")
     return redirect(url_for("index"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)
