@@ -745,3 +745,96 @@ def test_mj_mood_graph_trends_cross_month():
     assert trends["saddest_month_of_year"][1] == 20
 
     print("Mood Graph Trends Cross Month Test Passed")
+
+    """Exclude Weeks/Months Test"""
+def test_entry_excluded_flag_default_false():
+    """
+    New entries should be included in weekly/monthly reports by default.
+    """
+    e = Entry("Test Exclusion", 1, 1, 2025, "body", 3, 50, 50)
+    # direct attribute + helper, just to be safe
+    assert e.is_excluded_from_reports is False
+    assert e.is_excluded_from_reports_check() is False
+def test_mj_set_entry_excluded_and_helper():
+    """
+    Verify the Mood_Journal helpers to set and read the exclusion flag.
+    """
+    mj = Mood_Journal(use_database=False)
+    entry_id = mj.mj_create_entry("Day", 1, 1, 2025, "body", 4, 40, 40)
+
+    # Default should be False
+    assert mj.mj_is_entry_excluded_from_reports(entry_id) is False
+
+    # Toggling on should return True and persist
+    assert mj.mj_set_entry_excluded_from_reports(entry_id, True) is True
+    assert mj.mj_is_entry_excluded_from_reports(entry_id) is True
+
+    # Toggling off works as well
+    assert mj.mj_set_entry_excluded_from_reports(entry_id, False) is True
+    assert mj.mj_is_entry_excluded_from_reports(entry_id) is False
+
+    # Non-existent ID → helper returns None / False appropriately
+    assert mj.mj_is_entry_excluded_from_reports("does-not-exist") is None
+    assert mj.mj_set_entry_excluded_from_reports("does-not-exist", True) is False
+def test_weekly_report_ignores_excluded_entries():
+    """
+    Weekly report should not count entries that have been excluded.
+    """
+    mj = Mood_Journal(use_database=False)
+
+    # Two entries in the same 7-day window with different rankings
+    id_included = mj.mj_create_entry(
+        "good day", 7, 1, 2025, "body", 1, 80, 10  # ranking 1
+    )
+    id_excluded = mj.mj_create_entry(
+        "bad day", 6, 1, 2025, "body", 2, 10, 90  # ranking 2
+    )
+
+    # Exclude the second one from reports
+    assert mj.mj_set_entry_excluded_from_reports(id_excluded, True) is True
+
+    # Weekly report anchored on Jan 7 should only see the non-excluded entry
+    result = mj.mj_weekly_report(7, 1, 2025)
+    assert result == [1, 0, 0, 0, 0, 0, 0, 0]
+
+
+def test_weekly_report_all_entries_excluded_returns_none():
+    """
+    If all entries in the week are excluded, the weekly report should return None.
+    """
+    mj = Mood_Journal(use_database=False)
+
+    entry_id = mj.mj_create_entry(
+        "bad week", 7, 1, 2025, "body", 3, 5, 95
+    )
+    mj.mj_set_entry_excluded_from_reports(entry_id, True)
+
+    assert mj.mj_weekly_report(7, 1, 2025) is None
+def test_monthly_report_respects_exclusion_and_toggle():
+    """
+    Monthly report should include/exclude entries based on the exclusion flag
+    and respond to toggling.
+    """
+    mj = Mood_Journal(use_database=False)
+
+    # Same month, different days, same ranking so we can count them easily
+    id1 = mj.mj_create_entry(
+        "day1", 1, 2, 2025, "body", 1, 60, 20
+    )
+    id2 = mj.mj_create_entry(
+        "day2", 2, 2, 2025, "body", 1, 40, 80
+    )
+
+    # Initially both should count → two rank-1 entries
+    result = mj.mj_monthly_report(28, 2, 2025)
+    assert result == [2, 0, 0, 0, 0, 0, 0, 0]
+
+    # Exclude the second entry → only one rank-1 count
+    mj.mj_set_entry_excluded_from_reports(id2, True)
+    result = mj.mj_monthly_report(28, 2, 2025)
+    assert result == [1, 0, 0, 0, 0, 0, 0, 0]
+
+    # Un-exclude again → back to two
+    mj.mj_set_entry_excluded_from_reports(id2, False)
+    result = mj.mj_monthly_report(28, 2, 2025)
+    assert result == [2, 0, 0, 0, 0, 0, 0, 0]

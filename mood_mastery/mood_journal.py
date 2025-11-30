@@ -34,6 +34,7 @@ from models import MoodEntry
 import json
 from typing import Optional, Dict, List, Tuple
 
+
 class Mood_Journal:
     def __init__(self, use_database=True):
         # TODO
@@ -43,7 +44,7 @@ class Mood_Journal:
         # In the meantime, maybe just creating a dictionary to store all of the entries could be good
         # so we can at least test the general logic of the methods in entry.py and some kind of implementation for
         # delete_entry, even if not specifically for a database just yet
-        
+
         self.entries_dict = {}
         self.streak_current = 0
         self.streak_longest = 0
@@ -53,8 +54,8 @@ class Mood_Journal:
 
     def _get_app(self):
         """Safely get the Flask app from db"""
-        return getattr(db, 'app', None)
-        
+        return getattr(db, "app", None)
+
     def _ensure_db_loaded(self, app=None):
         """Lazy load from database when needed"""
         if not self._db_loaded and self.use_database:
@@ -65,47 +66,76 @@ class Mood_Journal:
                         db_entries = MoodEntry.query.all()
                         for db_entry in db_entries:
                             entry = db_entry.to_entry()
+                            # Ensure exclusion flag is present; default False if missing
+                            if not hasattr(entry, "is_excluded_from_reports"):
+                                entry.is_excluded_from_reports = getattr(
+                                    db_entry, "is_excluded_from_reports", False
+                                )
                             self.entries_dict[entry.entry_id_str] = entry
                         self.recompute_streak()
                         self._db_loaded = True
                 except Exception as e:
                     print(f"Warning: Could not load from database: {e}")
-                
+
     def _load_entries_from_db(self):
         """Load all entries from database into memory"""
         with db.app.app_context():  # Ensure app context
             db_entries = MoodEntry.query.all()
             for db_entry in db_entries:
                 entry = db_entry.to_entry()
+                if not hasattr(entry, "is_excluded_from_reports"):
+                    entry.is_excluded_from_reports = getattr(
+                        db_entry, "is_excluded_from_reports", False
+                    )
                 self.entries_dict[entry.entry_id_str] = entry
 
     def _save_entry_to_db(self, entry: Entry):
         """Save to database only if enabled"""
         if not self.use_database:
             return
-            
+
         app = self._get_app()
         if app:
             try:
                 with app.app_context():
-                    existing = MoodEntry.query.filter_by(entry_id_str=entry.entry_id_str).first()
-                    
+                    existing = MoodEntry.query.filter_by(
+                        entry_id_str=entry.entry_id_str
+                    ).first()
+
                     if existing:
                         # Update existing
                         existing.entry_name = entry.entry_name
                         existing.entry_date = entry.entry_date
                         existing.ranking = entry.ranking
                         existing.mood_rating = entry.mood_rating
-                        existing.difficulty_ranking = getattr(entry, 'difficulty_ranking', 3)
+                        existing.difficulty_ranking = getattr(
+                            entry, "difficulty_ranking", 3
+                        )
                         existing.entry_body = entry.entry_body
-                        existing.tags_raw = ",".join(entry.tags) if getattr(entry, "tags", None) else None
-                        existing.biometrics_raw = json.dumps(entry.biometrics) if getattr(entry, "biometrics", None) else None
-                        existing.is_private = getattr(entry, 'is_private', False)
+                        existing.tags_raw = (
+                            ",".join(entry.tags)
+                            if getattr(entry, "tags", None)
+                            else None
+                        )
+                        existing.biometrics_raw = (
+                            json.dumps(entry.biometrics)
+                            if getattr(entry, "biometrics", None)
+                            else None
+                        )
+                        existing.is_private = getattr(entry, "is_private", False)
+                        if hasattr(existing, "is_excluded_from_reports"):
+                            existing.is_excluded_from_reports = getattr(
+                                entry, "is_excluded_from_reports", False
+                            )
                     else:
                         # Create new
                         db_entry = MoodEntry.from_entry(entry)
+                        if hasattr(db_entry, "is_excluded_from_reports"):
+                            db_entry.is_excluded_from_reports = getattr(
+                                entry, "is_excluded_from_reports", False
+                            )
                         db.session.add(db_entry)
-                    
+
                     db.session.commit()
             except Exception as e:
                 print(f"Warning: Could not save to database: {e}")
@@ -114,18 +144,19 @@ class Mood_Journal:
         """Delete from database only if enabled"""
         if not self.use_database:
             return
-            
+
         app = self._get_app()
         if app:
             try:
                 with app.app_context():
-                    entry = MoodEntry.query.filter_by(entry_id_str=entry_id_str).first()
+                    entry = MoodEntry.query.filter_by(
+                        entry_id_str=entry_id_str
+                    ).first()
                     if entry:
                         db.session.delete(entry)
                         db.session.commit()
             except Exception as e:
                 print(f"Warning: Could not delete from database: {e}")
-
 
     def _to_date(self, d) -> date:
         """
@@ -145,29 +176,94 @@ class Mood_Journal:
 
     def _entry_date(self, e: Entry) -> date:
         return self._to_date(e.entry_date)
-        
-    def mj_log_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int,
-                 entry_body: str, ranking: int, mood_rating: int, difficulty_ranking: int, tags=None, biometrics=None) -> str:
+
+    def mj_log_entry(
+        self,
+        entry_name: str,
+        entry_day: int,
+        entry_month: int,
+        entry_year: int,
+        entry_body: str,
+        ranking: int,
+        mood_rating: int,
+        difficulty_ranking: int,
+        tags=None,
+        biometrics=None,
+    ) -> str:
         """
         Create an entry and update the streaks. Returns the new entry's id.
         """
-        entry_id = self.mj_create_entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, mood_rating, difficulty_ranking, tags, biometrics)
+        entry_id = self.mj_create_entry(
+            entry_name,
+            entry_day,
+            entry_month,
+            entry_year,
+            entry_body,
+            ranking,
+            mood_rating,
+            difficulty_ranking,
+            tags,
+            biometrics,
+        )
         new_entry = self.mj_get_entry(entry_id)
         self.update_streak(new_entry.entry_date)
         return entry_id
 
-    def mj_create_entry(self, entry_name: str, entry_day: int, entry_month: int, entry_year: int, entry_body: str, ranking: int, mood_rating: int, difficulty_ranking: int, tags=None,biometrics=None):
-        new_entry = Entry(entry_name, entry_day, entry_month, entry_year, entry_body, ranking, mood_rating, difficulty_ranking, tags, biometrics)
+    def mj_create_entry(
+        self,
+        entry_name: str,
+        entry_day: int,
+        entry_month: int,
+        entry_year: int,
+        entry_body: str,
+        ranking: int,
+        mood_rating: int,
+        difficulty_ranking: int,
+        tags=None,
+        biometrics=None,
+    ):
+        new_entry = Entry(
+            entry_name,
+            entry_day,
+            entry_month,
+            entry_year,
+            entry_body,
+            ranking,
+            mood_rating,
+            difficulty_ranking,
+            tags,
+            biometrics,
+        )
         new_entry_id = new_entry.entry_id_str
         self.entries_dict[new_entry_id] = new_entry
         self._save_entry_to_db(new_entry)
-        
+
         self.recompute_streak()
         return new_entry_id
 
-    def mj_edit_entry(self, entry_id_str: str, new_name: str, new_day: int, new_month: int, new_year: int, new_body: str, new_ranking: int, new_mood_rating: int, new_difficulty_ranking: int):
+    def mj_edit_entry(
+        self,
+        entry_id_str: str,
+        new_name: str,
+        new_day: int,
+        new_month: int,
+        new_year: int,
+        new_body: str,
+        new_ranking: int,
+        new_mood_rating: int,
+        new_difficulty_ranking: int,
+    ):
         entry = self.entries_dict[entry_id_str]
-        entry.edit_entry(new_name, new_day, new_month, new_year, new_body, new_ranking, new_mood_rating, new_difficulty_ranking)
+        entry.edit_entry(
+            new_name,
+            new_day,
+            new_month,
+            new_year,
+            new_body,
+            new_ranking,
+            new_mood_rating,
+            new_difficulty_ranking,
+        )
         # Update database if enabled
         self._save_entry_to_db(entry)
 
@@ -201,11 +297,11 @@ class Mood_Journal:
         """
         if entry_id_str in self.entries_dict:
             return self.entries_dict[entry_id_str]
-        
+
         # If not found, try loading from database
         self._ensure_db_loaded()
         return self.entries_dict.get(entry_id_str, False)
-        
+
     def mj_get_entry_privacy_status(self, entry_id_str: str):
         """
         Returns the privacy status of an Entry of entry_id_str if such an entry exists.
@@ -215,82 +311,109 @@ class Mood_Journal:
         - entry_id_str : str        // The id of the Entry object the user wishes to search for
         """
         self._ensure_db_loaded()
-        if(self.mj_get_entry(entry_id_str) ==  False):
-            return None # No such entry exists
+        if self.mj_get_entry(entry_id_str) == False:
+            return None  # No such entry exists
         else:
             # Returns true if entry is private; False if not
             return self.mj_get_entry(entry_id_str).is_private_check()
-        
+
+    # ---- NEW: exclusion toggle API ----
+    def mj_set_entry_excluded_from_reports(
+        self, entry_id_str: str, excluded: bool
+    ) -> bool:
+        """
+        Toggle whether an entry should be excluded from weekly/monthly reports.
+        Returns True if the entry was found and updated, False otherwise.
+        """
+        self._ensure_db_loaded()
+        entry = self.entries_dict.get(entry_id_str)
+        if not entry:
+            return False
+        entry.set_excluded_from_reports(excluded)
+        self._save_entry_to_db(entry)
+        return True
+
+    def mj_is_entry_excluded_from_reports(self, entry_id_str: str):
+        """
+        Returns True/False if the entry exists, or None if it doesn't.
+        """
+        self._ensure_db_loaded()
+        entry = self.entries_dict.get(entry_id_str)
+        if not entry:
+            return None
+        return entry.is_excluded_from_reports_check()
+
     "Returns all the mood entries"
     def mj_get_all_entries(self):
         self._ensure_db_loaded()
         return list(self.entries_dict.values())
-    
+
     """Streak System"""
+
     def recompute_streak(self):
         """
         Recompute current/longest streak from all entries.
         """
         entries = self.mj_get_all_entries()
-        
+
         if not entries:
             self.streak_current = 0
             self.streak_longest = 0
-            self.last_entry_date = None 
-            return 
-        #get unqiue entry dates
+            self.last_entry_date = None
+            return
+        # get unqiue entry dates
         dates = sorted({e.entry_date for e in entries})
         self.last_entry_date = dates[-1]
 
-        #Longest streak
+        # Longest streak
         longest = 1
         run = 1
-        for i in range(1,len(dates)):
-            if (dates[i] -dates[i-1]) == timedelta(days=1):
-                run +=1
+        for i in range(1, len(dates)):
+            if (dates[i] - dates[i - 1]) == timedelta(days=1):
+                run += 1
             else:
-                longest = max(longest,run)
+                longest = max(longest, run)
                 run = 1
-        longest = max(longest,run)
-        #Current streak
+        longest = max(longest, run)
+        # Current streak
         current = 1
-        for j in range(len(dates)-1,0,-1):
-            if(dates[j] - dates[j-1]) == timedelta(days=1):
-                current +=1 
+        for j in range(len(dates) - 1, 0, -1):
+            if (dates[j] - dates[j - 1]) == timedelta(days=1):
+                current += 1
             else:
                 break
         self.streak_current = current
         self.streak_longest = longest
-        
+
     def get_streak_summary(self):
         self._ensure_db_loaded()
         return {
             "current_streak": self.streak_current,
             "longest_streak": self.streak_longest,
-            "last_entry_date": self.last_entry_date
+            "last_entry_date": self.last_entry_date,
         }
-    
+
     def update_streak(self, entry_date: date):
         "Used by log entry to update streak when entry is added for that day"
         if self.last_entry_date is None:
             self.last_entry_date = entry_date
             self.streak_current = 1
-            self.streak_longest = max(self.streak_longest,self.streak_current)
+            self.streak_longest = max(self.streak_longest, self.streak_current)
             return
         if entry_date == self.last_entry_date:
-            return #entry already logged that day
+            return  # entry already logged that day
         if entry_date == self.last_entry_date + timedelta(days=1):
             self.streak_current += 1
             self.last_entry_date = entry_date
-            self.streak_longest = max(self.streak_longest,self.streak_current)
+            self.streak_longest = max(self.streak_longest, self.streak_current)
             return
-        if entry_date > self.last_entry_date +timedelta(days=1):
-            #A gap breaks the current streak
+        if entry_date > self.last_entry_date + timedelta(days=1):
+            # A gap breaks the current streak
             self.streak_current = 1
             self.last_entry_date = entry_date
-            self.streak_longest = max(self.streak_longest,self.streak_current)
+            self.streak_longest = max(self.streak_longest, self.streak_current)
             return
-        #Else, recompute just incase
+        # Else, recompute just incase
         self.recompute_streak()
 
     def mj_weekly_report(self, curr_day, curr_month, curr_year):
@@ -299,16 +422,20 @@ class Mood_Journal:
         weekly_dates = []
 
         for i in range(7):
-            weekly_dates.append(curr_date - timedelta(days = i))
-        
+            weekly_dates.append(curr_date - timedelta(days=i))
+
         entries_to_report = []
 
         for i in self.entries_dict.keys():
+            entry = self.entries_dict[i]
+            # Skip entries the user has chosen to exclude
+            if getattr(entry, "is_excluded_from_reports", False):
+                continue
             for d in weekly_dates:
-                if self.entries_dict[i].entry_date == d:
+                if entry.entry_date == d:
                     entries_to_report.append(i)
-        
-        emoji_count =  [0, 0, 0, 0, 0, 0, 0, 0]
+
+        emoji_count = [0, 0, 0, 0, 0, 0, 0, 0]
 
         if len(entries_to_report) == 0:
             return None
@@ -316,23 +443,27 @@ class Mood_Journal:
             for i in entries_to_report:
                 emoji_count[self.entries_dict[i].ranking - 1] += 1
             return emoji_count
-    
+
     def mj_monthly_report(self, curr_day, curr_month, curr_year):
         self._ensure_db_loaded()
         curr_date = date(curr_year, curr_month, curr_day)
         monthly_dates = []
 
         for i in range(30):
-            monthly_dates.append(curr_date - timedelta(days = i))
-        
+            monthly_dates.append(curr_date - timedelta(days=i))
+
         entries_to_report = []
 
         for i in self.entries_dict.keys():
+            entry = self.entries_dict[i]
+            # Skip entries the user has chosen to exclude
+            if getattr(entry, "is_excluded_from_reports", False):
+                continue
             for d in monthly_dates:
-                if self.entries_dict[i].entry_date == d:
+                if entry.entry_date == d:
                     entries_to_report.append(i)
-        
-        emoji_count =  [0, 0, 0, 0, 0, 0, 0, 0]
+
+        emoji_count = [0, 0, 0, 0, 0, 0, 0, 0]
 
         if len(entries_to_report) == 0:
             return None
@@ -347,13 +478,21 @@ class Mood_Journal:
         """
         self._ensure_db_loaded()
         target = date(year, month, day)
-        items = [e for e in self.entries_dict.values() if self._entry_date(e) == target]
-    
-        items.sort(key=lambda e: (
-            getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
-            getattr(e, "entry_name", ""),
-            getattr(e, "entry_id_str", "")
-        ))
+        items = [
+            e for e in self.entries_dict.values() if self._entry_date(e) == target
+        ]
+
+        items.sort(
+            key=lambda e: (
+                getattr(
+                    e,
+                    "created_at",
+                    datetime.combine(self._entry_date(e), datetime.min.time()),
+                ),
+                getattr(e, "entry_name", ""),
+                getattr(e, "entry_id_str", ""),
+            )
+        )
         return items
 
     def mj_entries_between(self, start: date, end: date) -> List[Entry]:
@@ -366,14 +505,22 @@ class Mood_Journal:
             d = self._entry_date(e)
             if start <= d <= end:
                 items.append(e)
-        items.sort(key=lambda e: (
-            self._entry_date(e),
-            getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
-            getattr(e, "entry_id_str", "")
-        ))
+        items.sort(
+            key=lambda e: (
+                self._entry_date(e),
+                getattr(
+                    e,
+                    "created_at",
+                    datetime.combine(self._entry_date(e), datetime.min.time()),
+                ),
+                getattr(e, "entry_id_str", ""),
+            )
+        )
         return items
 
-    def mj_entries_grouped_by_day(self, start: date, end: date) -> Dict[date, List[Entry]]:
+    def mj_entries_grouped_by_day(
+        self, start: date, end: date
+    ) -> Dict[date, List[Entry]]:
         """
         Calendar-friendly structure: {date: [entries...]}, including empty days in range.
         """
@@ -391,11 +538,17 @@ class Mood_Journal:
                 days[d].append(e)
 
         for d, lst in days.items():
-            lst.sort(key=lambda e: (
-                getattr(e, "created_at", datetime.combine(self._entry_date(e), datetime.min.time())),
-                getattr(e, "entry_name", ""),
-                getattr(e, "entry_id_str", "")
-            ))
+            lst.sort(
+                key=lambda e: (
+                    getattr(
+                        e,
+                        "created_at",
+                        datetime.combine(self._entry_date(e), datetime.min.time()),
+                    ),
+                    getattr(e, "entry_name", ""),
+                    getattr(e, "entry_id_str", ""),
+                )
+            )
         return days
 
     def mj_month_calendar(self, year: int, month: int) -> Dict[date, List[Entry]]:
@@ -417,7 +570,9 @@ class Mood_Journal:
         end = last + timedelta(days=(6 - last.weekday()))
         return self.mj_entries_grouped_by_day(start, end)
 
-    def mj_mood_rating_graph(self, type_of_graph: str, start_date: date, end_date: date):
+    def mj_mood_rating_graph(
+        self, type_of_graph: str, start_date: date, end_date: date
+    ):
         """
         Returns a dictionary representing the mood_rating information from start_date to end_date for either a:
             - Line graph showing all mood_ratings across the period of time
@@ -435,9 +590,9 @@ class Mood_Journal:
         """
         self._ensure_db_loaded()
         entries_grouped_by_day = self.mj_entries_grouped_by_day(start_date, end_date)
-        
+
         rating_graph_info = {}
-        
+
         if type_of_graph == "line":
             for curr_day, list_of_entries in entries_grouped_by_day.items():
                 # Setting mood_ratings_avg to 0 (an invalid mood_rating value) by default; indicates no entries for the day
@@ -448,22 +603,25 @@ class Mood_Journal:
                     for curr_entry in list_of_entries:
                         mood_ratings_avg += curr_entry.mood_rating
                     mood_ratings_avg = mood_ratings_avg / len(list_of_entries)
-                
+
                 rating_graph_info[curr_day] = mood_ratings_avg
 
         elif type_of_graph == "bar":
             # Initializing rating_graph_info to have a count for each rating (1 to 100)
-            for i in range(1,101):
+            for i in range(1, 101):
                 rating_graph_info[i] = 0
-            
+
             # Iterating through every day's entries, and incrementing the count for each encountered mood_rating accordingly
             for curr_day, list_of_entries in entries_grouped_by_day.items():
                 for curr_entry in list_of_entries:
                     curr_rating = curr_entry.mood_rating
-                    rating_graph_info[curr_rating] = rating_graph_info[curr_rating] + 1
-        
+                    rating_graph_info[curr_rating] = (
+                        rating_graph_info[curr_rating] + 1
+                    )
+
         return rating_graph_info
-    #Organize tags 
+
+    # Organize tags
     def mj_all_tags(self):
         """Returns sorted list of all unique tags"""
         self._ensure_db_loaded()
@@ -473,6 +631,7 @@ class Mood_Journal:
             for t in getattr(e, "tags", []):
                 tag_set.add(t)
         return sorted(tag_set)
+
     def mj_entries_with_tag(self, tag):
         """Returns all entries with given tag sorted by date and name"""
         self._ensure_db_loaded()
@@ -488,6 +647,7 @@ class Mood_Journal:
             )
         )
         return items
+
     def mj_tag_summary(self):
         """Returns a list of  pairs summarizing how often a tag is used"""
         self._ensure_db_loaded()
@@ -498,10 +658,10 @@ class Mood_Journal:
 
         # Convert to sorted list of (tag, count)
         return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
-    
-    #takes into account ranking(emoji), mood rating(scale from 1-100)
+
+    # takes into account ranking(emoji), mood rating(scale from 1-100)
     def mj_emoji_groups(self, emoji):
-        #creates a list with the keys of every entry that has a given emoji
+        # creates a list with the keys of every entry that has a given emoji
         self._ensure_db_loaded()
         keys = []
         ratingCount = [0] * 100
@@ -512,7 +672,7 @@ class Mood_Journal:
                 keys.append(i)
 
         return ratingCount, keys
-    
+
     def mj_clear_all_data(self):
         self.entries_dict.clear()
         if self.use_database:
@@ -547,73 +707,151 @@ class Mood_Journal:
         (None)
         """
         self._ensure_db_loaded()
-        mood_ratings_by_day_of_week = { "Monday": [], "Tuesday" : [], "Wednesday" : [],
-                                        "Thursday" : [], "Friday" : [], "Saturday" : [], "Sunday" : [] }
-        mood_ratings_by_time_of_month = { "First third" : [], "Second third" : [], "Last third": [] }
-        mood_ratings_by_month_of_year = { "January" : [], "February" : [], "March" : [],
-                                          "April" : [], "May" : [], "June" : [],
-                                          "July" : [], "August" : [], "September" : [],
-                                          "October" : [], "November" : [], "December" : [] }
+        mood_ratings_by_day_of_week = {
+            "Monday": [],
+            "Tuesday": [],
+            "Wednesday": [],
+            "Thursday": [],
+            "Friday": [],
+            "Saturday": [],
+            "Sunday": [],
+        }
+        mood_ratings_by_time_of_month = {
+            "First third": [],
+            "Second third": [],
+            "Last third": [],
+        }
+        mood_ratings_by_month_of_year = {
+            "January": [],
+            "February": [],
+            "March": [],
+            "April": [],
+            "May": [],
+            "June": [],
+            "July": [],
+            "August": [],
+            "September": [],
+            "October": [],
+            "November": [],
+            "December": [],
+        }
 
         # Sorting all entries by day of the week // day of the month range (1-10, 11-20, 20-onward) // month of the year
         for entry in self.entries_dict.values():
-            entry_day_of_week_num = entry.entry_date.weekday() # 0 = Monday, ..., 6 = Sunday
+            entry_day_of_week_num = entry.entry_date.weekday()  # 0 = Monday, ..., 6 = Sunday
             entry_day_of_month = entry.entry_date.day
-            entry_month = entry.entry_date.month # 1 = January, ..., 12 = December
+            entry_month = entry.entry_date.month  # 1 = January, ..., 12 = December
 
             match entry_day_of_week_num:
-                case 0: mood_ratings_by_day_of_week["Monday"].append(entry.mood_rating)
-                case 1: mood_ratings_by_day_of_week["Tuesday"].append(entry.mood_rating)
-                case 2: mood_ratings_by_day_of_week["Wednesday"].append(entry.mood_rating)
-                case 3: mood_ratings_by_day_of_week["Thursday"].append(entry.mood_rating)
-                case 4: mood_ratings_by_day_of_week["Friday"].append(entry.mood_rating)
-                case 5: mood_ratings_by_day_of_week["Saturday"].append(entry.mood_rating)
-                case 6: mood_ratings_by_day_of_week["Sunday"].append(entry.mood_rating)
+                case 0:
+                    mood_ratings_by_day_of_week["Monday"].append(entry.mood_rating)
+                case 1:
+                    mood_ratings_by_day_of_week["Tuesday"].append(entry.mood_rating)
+                case 2:
+                    mood_ratings_by_day_of_week["Wednesday"].append(entry.mood_rating)
+                case 3:
+                    mood_ratings_by_day_of_week["Thursday"].append(entry.mood_rating)
+                case 4:
+                    mood_ratings_by_day_of_week["Friday"].append(entry.mood_rating)
+                case 5:
+                    mood_ratings_by_day_of_week["Saturday"].append(entry.mood_rating)
+                case 6:
+                    mood_ratings_by_day_of_week["Sunday"].append(entry.mood_rating)
 
             if entry_day_of_month < 11:
                 mood_ratings_by_time_of_month["First third"].append(entry.mood_rating)
             elif entry_day_of_month < 21:
-                mood_ratings_by_time_of_month["Second third"].append(entry.mood_rating)
+                mood_ratings_by_time_of_month["Second third"].append(
+                    entry.mood_rating
+                )
             else:
                 mood_ratings_by_time_of_month["Last third"].append(entry.mood_rating)
 
             match entry_month:
-                case 1: mood_ratings_by_month_of_year["January"].append(entry.mood_rating)
-                case 2: mood_ratings_by_month_of_year["February"].append(entry.mood_rating)
-                case 3: mood_ratings_by_month_of_year["March"].append(entry.mood_rating)
-                case 4: mood_ratings_by_month_of_year["April"].append(entry.mood_rating)
-                case 5: mood_ratings_by_month_of_year["May"].append(entry.mood_rating)
-                case 6: mood_ratings_by_month_of_year["June"].append(entry.mood_rating)
-                case 7: mood_ratings_by_month_of_year["July"].append(entry.mood_rating)
-                case 8: mood_ratings_by_month_of_year["August"].append(entry.mood_rating)
-                case 9: mood_ratings_by_month_of_year["September"].append(entry.mood_rating)
-                case 10: mood_ratings_by_month_of_year["October"].append(entry.mood_rating)
-                case 11: mood_ratings_by_month_of_year["November"].append(entry.mood_rating)
-                case 12: mood_ratings_by_month_of_year["December"].append(entry.mood_rating)
-                
-        mood_rating_day_of_week_avgs = { "Monday": 0, "Tuesday" : 0, "Wednesday" : 0,
-                                        "Thursday" : 0, "Friday" : 0, "Saturday" : 0, "Sunday" : 0 }
-        mood_ratings_time_of_month_avgs = { "First third" : 0, "Second third" : 0, "Last third": 0 }
-        mood_rating_month_of_year_avgs = { "January" : 0, "February" : 0, "March" : 0,
-                                          "April" : 0, "May" : 0, "June" : 0,
-                                          "July" : 0, "August" : 0, "September" : 0,
-                                          "October" : 0, "November" : 0, "December" : 0 }
-        
+                case 1:
+                    mood_ratings_by_month_of_year["January"].append(entry.mood_rating)
+                case 2:
+                    mood_ratings_by_month_of_year["February"].append(entry.mood_rating)
+                case 3:
+                    mood_ratings_by_month_of_year["March"].append(entry.mood_rating)
+                case 4:
+                    mood_ratings_by_month_of_year["April"].append(entry.mood_rating)
+                case 5:
+                    mood_ratings_by_month_of_year["May"].append(entry.mood_rating)
+                case 6:
+                    mood_ratings_by_month_of_year["June"].append(entry.mood_rating)
+                case 7:
+                    mood_ratings_by_month_of_year["July"].append(entry.mood_rating)
+                case 8:
+                    mood_ratings_by_month_of_year["August"].append(entry.mood_rating)
+                case 9:
+                    mood_ratings_by_month_of_year["September"].append(
+                        entry.mood_rating
+                    )
+                case 10:
+                    mood_ratings_by_month_of_year["October"].append(entry.mood_rating)
+                case 11:
+                    mood_ratings_by_month_of_year["November"].append(
+                        entry.mood_rating
+                    )
+                case 12:
+                    mood_ratings_by_month_of_year["December"].append(
+                        entry.mood_rating
+                    )
+
+        mood_rating_day_of_week_avgs = {
+            "Monday": 0,
+            "Tuesday": 0,
+            "Wednesday": 0,
+            "Thursday": 0,
+            "Friday": 0,
+            "Saturday": 0,
+            "Sunday": 0,
+        }
+        mood_ratings_time_of_month_avgs = {
+            "First third": 0,
+            "Second third": 0,
+            "Last third": 0,
+        }
+        mood_rating_month_of_year_avgs = {
+            "January": 0,
+            "February": 0,
+            "March": 0,
+            "April": 0,
+            "May": 0,
+            "June": 0,
+            "July": 0,
+            "August": 0,
+            "September": 0,
+            "October": 0,
+            "November": 0,
+            "December": 0,
+        }
+
         # Calculating average mood rating for each day of the week
         for day in mood_ratings_by_day_of_week.keys():
             if len(mood_ratings_by_day_of_week[day]) != 0:
-                mood_rating_day_of_week_avgs[day] = sum(mood_ratings_by_day_of_week[day]) / len(mood_ratings_by_day_of_week[day])
+                mood_rating_day_of_week_avgs[day] = (
+                    sum(mood_ratings_by_day_of_week[day])
+                    / len(mood_ratings_by_day_of_week[day])
+                )
 
         # Calculating average mood rating for each day of the month range (1-10, 11-20, 20-onward)
         for time_of_month in mood_ratings_by_time_of_month.keys():
             if len(mood_ratings_by_time_of_month[time_of_month]) != 0:
-                mood_ratings_time_of_month_avgs[time_of_month] = sum(mood_ratings_by_time_of_month[time_of_month]) / len(mood_ratings_by_time_of_month[time_of_month])
+                mood_ratings_time_of_month_avgs[time_of_month] = (
+                    sum(mood_ratings_by_time_of_month[time_of_month])
+                    / len(mood_ratings_by_time_of_month[time_of_month])
+                )
 
         # Calculating average mood rating for each month of the year
-        for month in mood_ratings_by_month_of_year.keys():
-            if len(mood_ratings_by_month_of_year[month]) != 0:
-                mood_rating_month_of_year_avgs[month] = sum(mood_ratings_by_month_of_year[month]) / len(mood_ratings_by_month_of_year[month])
-        
+        for month_of_year in mood_ratings_by_month_of_year.keys():
+            if len(mood_ratings_by_month_of_year[month_of_year]) != 0:
+                mood_rating_month_of_year_avgs[month_of_year] = (
+                    sum(mood_ratings_by_month_of_year[month_of_year])
+                    / len(mood_ratings_by_month_of_year[month_of_year])
+                )
+
         # Finding highest (happiest) and lowest (saddest) mood rating for each category
         happiest_day_of_week_avg = 0
         saddest_day_of_week_avg = 999
@@ -643,14 +881,18 @@ class Mood_Journal:
                     happiest_time_of_month_avg = avg
                     happiest_time_of_month = time_of_month
                 elif avg == happiest_time_of_month_avg:
-                    happiest_time_of_month = happiest_time_of_month + ", " + time_of_month
-                
+                    happiest_time_of_month = (
+                        happiest_time_of_month + ", " + time_of_month
+                    )
+
                 if avg < saddest_time_of_month_avg:
                     saddest_time_of_month_avg = avg
                     saddest_time_of_month = time_of_month
                 elif avg == saddest_time_of_month_avg:
-                    saddest_time_of_month = saddest_time_of_month + ", " + time_of_month
-                
+                    saddest_time_of_month = (
+                        saddest_time_of_month + ", " + time_of_month
+                    )
+
         happiest_month_of_year_avg = 0
         saddest_month_of_year_avg = 999
         happiest_month_of_year = ""
@@ -661,19 +903,43 @@ class Mood_Journal:
                     happiest_month_of_year_avg = avg
                     happiest_month_of_year = month_of_year
                 elif avg == happiest_month_of_year_avg:
-                    happiest_month_of_year = happiest_month_of_year + ", " + month_of_year
-                
+                    happiest_month_of_year = (
+                        happiest_month_of_year + ", " + month_of_year
+                    )
+
                 if avg < saddest_month_of_year_avg:
                     saddest_month_of_year_avg = avg
                     saddest_month_of_year = month_of_year
                 elif avg == saddest_month_of_year_avg:
-                    saddest_month_of_year = saddest_month_of_year + ", " + month_of_year
+                    saddest_month_of_year = (
+                        saddest_month_of_year + ", " + month_of_year
+                    )
 
-        mood_graph_trends = { "happiest_day_of_week" : [ happiest_day_of_week, happiest_day_of_week_avg ],
-                             "saddest_day_of_week" : [ saddest_day_of_week, saddest_day_of_week_avg ],
-                             "happiest_time_of_month" : [ happiest_time_of_month, happiest_time_of_month_avg ],
-                             "saddest_time_of_month" : [ saddest_time_of_month, saddest_time_of_month_avg ],
-                             "happiest_month_of_year" : [ happiest_month_of_year, happiest_month_of_year_avg ],
-                             "saddest_month_of_year" : [ saddest_month_of_year, saddest_month_of_year_avg ] }
-        
+        mood_graph_trends = {
+            "happiest_day_of_week": [
+                happiest_day_of_week,
+                happiest_day_of_week_avg,
+            ],
+            "saddest_day_of_week": [
+                saddest_day_of_week,
+                saddest_day_of_week_avg,
+            ],
+            "happiest_time_of_month": [
+                happiest_time_of_month,
+                happiest_time_of_month_avg,
+            ],
+            "saddest_time_of_month": [
+                saddest_time_of_month,
+                saddest_time_of_month_avg,
+            ],
+            "happiest_month_of_year": [
+                happiest_month_of_year,
+                happiest_month_of_year_avg,
+            ],
+            "saddest_month_of_year": [
+                saddest_month_of_year,
+                saddest_month_of_year_avg,
+            ],
+        }
+
         return mood_graph_trends

@@ -123,6 +123,7 @@ def _sorted_entries():
     entries.sort(
         key=lambda e: (
             e.entry_date,
+            getattr(e, "created_at", datetime.min),
             getattr(e, "entry_id_str", ""),
         ),
         reverse=True,
@@ -155,6 +156,71 @@ def _build_report_dict(title: str, counts: list[int], start: date, end: date) ->
     }
 
 
+# ----------------- NEW: Mood trends + difficulty helpers -----------------
+
+
+def _mood_trends_for_ui():
+    """
+    Wrap mj_mood_graph_trends() into a template-friendly structure.
+    """
+    data = mj.mj_mood_graph_trends()
+
+    def wrap(key: str):
+        name, avg = data.get(key, ["", 0])
+        if not name:
+            return None
+        return {
+            "label": name,
+            "avg": round(avg, 1),
+        }
+
+    return {
+        "happiest_day": wrap("happiest_day_of_week"),
+        "saddest_day": wrap("saddest_day_of_week"),
+        "happiest_third": wrap("happiest_time_of_month"),
+        "saddest_third": wrap("saddest_time_of_month"),
+        "happiest_month": wrap("happiest_month_of_year"),
+        "saddest_month": wrap("saddest_month_of_year"),
+    }
+
+
+def _difficulty_by_weekday():
+    """
+    Compute average difficulty_ranking per weekday.
+    Returns list[ { label, avg, count } ] in Mon→Sun order.
+    """
+    entries = mj.mj_get_all_entries()
+    sums = {i: 0 for i in range(7)}
+    counts = {i: 0 for i in range(7)}
+
+    for e in entries:
+        d = e.entry_date
+        if not d:
+            continue
+        w = d.weekday()  # Monday=0 .. Sunday=6
+        val = getattr(e, "difficulty_ranking", None)
+        if val is None:
+            continue
+        sums[w] += val
+        counts[w] += 1
+
+    labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    result = []
+    for i in range(7):
+        if counts[i] > 0:
+            avg = sums[i] / counts[i]
+        else:
+            avg = None
+        result.append(
+            {
+                "label": labels[i],
+                "avg": avg,
+                "count": counts[i],
+            }
+        )
+    return result
+
+
 # ----------------- TAG ORGANIZER CONTEXT -----------------
 
 
@@ -169,7 +235,6 @@ def _tag_context(selected_tag: str | None = None) -> dict:
     all_tags = mj.mj_all_tags()
     tag_summary = mj.mj_tag_summary()
 
-    # tag can come from argument or query param
     tag_param = selected_tag or request.args.get("tag", "").strip()
     tag_entries = None
     norm_tag = None
@@ -198,6 +263,9 @@ def index():
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
 
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
+
     return render_template(
         "index.html",
         entries=entries,
@@ -207,6 +275,8 @@ def index():
         open_view_modal=False,
         open_edit_modal=False,
         open_report_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -276,6 +346,8 @@ def view_entry(entry_id):
     today = date.today()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
 
     view_body = None
     view_ask_password = False
@@ -293,9 +365,12 @@ def view_entry(entry_id):
         view_e=e,
         view_body=view_body,
         view_ask_password=view_ask_password,
+        view_excluded=getattr(e, "excluded_from_reports", False),
         open_view_modal=True,
         open_edit_modal=False,
         open_report_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -317,6 +392,8 @@ def unlock_entry(entry_id):
     today = date.today()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
 
     return render_template(
         "index.html",
@@ -327,9 +404,12 @@ def unlock_entry(entry_id):
         view_e=e,
         view_body=e.entry_body,
         view_ask_password=False,
+        view_excluded=getattr(e, "excluded_from_reports", False),
         open_view_modal=True,
         open_edit_modal=False,
         open_report_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -345,6 +425,8 @@ def edit_entry_open(entry_id):
     today = date.today()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
 
     return render_template(
         "index.html",
@@ -356,6 +438,8 @@ def edit_entry_open(entry_id):
         open_edit_modal=True,
         open_view_modal=False,
         open_report_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -495,6 +579,32 @@ def clear_biometric(entry_id, key):
     return redirect(url_for("edit_entry_open", entry_id=entry_id))
 
 
+# ---------- Exclude / Include from reports ----------
+
+
+@app.post("/entries/<entry_id>/exclude")
+def toggle_exclude_entry(entry_id):
+    """
+    Toggle whether an entry is included in mood/streak reports.
+    Uses a hidden 'exclude' field with values '0' or '1'.
+    """
+    e = mj.mj_get_entry(entry_id)
+    if not e:
+        flash("Entry not found.", "error")
+        return redirect(url_for("index"))
+
+    raw = request.form.get("exclude", "0")
+    new_val = raw == "1"
+    setattr(e, "excluded_from_reports", new_val)
+
+    if new_val:
+        flash("Entry excluded from mood reports.", "success")
+    else:
+        flash("Entry included in mood reports.", "success")
+
+    return redirect(url_for("index"))
+
+
 # ---------- Reports (weekly / monthly) ----------
 
 
@@ -512,6 +622,8 @@ def weekly_report():
     entries = _sorted_entries()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
 
     return render_template(
         "index.html",
@@ -523,6 +635,8 @@ def weekly_report():
         open_report_modal=True,
         open_view_modal=False,
         open_edit_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -541,6 +655,8 @@ def monthly_report():
     entries = _sorted_entries()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
 
     return render_template(
         "index.html",
@@ -552,6 +668,8 @@ def monthly_report():
         open_report_modal=True,
         open_view_modal=False,
         open_edit_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -569,6 +687,8 @@ def calendar_view():
     entries = _sorted_entries()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
 
     return render_template(
         "index.html",
@@ -580,6 +700,8 @@ def calendar_view():
         open_view_modal=False,
         open_edit_modal=False,
         open_report_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -598,18 +720,18 @@ def mood_graph():
     data_dict = mj.mj_mood_rating_graph(mode, start, today)
 
     if mode == "line":
-        # keys are date objects
         days_sorted = sorted(data_dict.keys())
         labels = [d.isoformat() for d in days_sorted]
         values = [data_dict[d] for d in days_sorted]
     else:
-        # bar: keys are 1..100 (ratings), but we don't assume they're all present
         labels = list(range(1, 101))
         values = [data_dict.get(i, 0) for i in labels]
 
     entries = _sorted_entries()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
 
     return render_template(
         "index.html",
@@ -623,6 +745,8 @@ def mood_graph():
         open_view_modal=False,
         open_edit_modal=False,
         open_report_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -640,9 +764,7 @@ def emoji_groups():
         rating_count, entry_keys = mj.mj_emoji_groups(emoji_rank)
         total_entries = sum(rating_count)
 
-        # Only include emojis that have entries
         if total_entries > 0:
-            # Create distribution bars
             distribution = []
             for rating in range(100):
                 count = rating_count[rating]
@@ -667,6 +789,8 @@ def emoji_groups():
     today = date.today()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
 
     return render_template(
         "index.html",
@@ -679,6 +803,8 @@ def emoji_groups():
         open_view_modal=False,
         open_edit_modal=False,
         open_report_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -697,17 +823,14 @@ def emoji_group_detail(emoji_rank):
         flash(f"No entries found for {ranking_emoji(emoji_rank)} emoji.", "error")
         return redirect(url_for("emoji_groups"))
 
-    # Get the actual entry objects for the keys
     emoji_entries = []
     for key in entry_keys:
         entry = mj.mj_get_entry(key)
         if entry:
             emoji_entries.append(entry)
 
-    # Sort entries by date (newest first)
     emoji_entries.sort(key=lambda e: e.entry_date, reverse=True)
 
-    # Create distribution data
     distribution = []
     for rating in range(100):
         count = rating_count[rating]
@@ -725,6 +848,8 @@ def emoji_group_detail(emoji_rank):
     today = date.today()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
 
     return render_template(
         "index.html",
@@ -744,6 +869,8 @@ def emoji_group_detail(emoji_rank):
         open_view_modal=False,
         open_edit_modal=False,
         open_report_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
 
@@ -754,7 +881,6 @@ def emoji_group_detail(emoji_rank):
 @app.post("/clear-all-data")
 def clear_all_data():
     """Clear all journal entries"""
-    # Add confirmation password for safety
     password = request.form.get("password", "").strip()
     if password != "confirm":  
         flash("Please type 'confirm' in the password field to clear all data.", "error")
