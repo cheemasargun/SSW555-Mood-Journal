@@ -10,6 +10,8 @@ dependencies = [
     "pytest>=8.2",
     "bcrypt>=4.0",
     "emoji>=2.0",
+    "apscheduler>=3.10",
+    "flask-apscheduler>=1.13"
 ]
 
 [project.optional-dependencies]
