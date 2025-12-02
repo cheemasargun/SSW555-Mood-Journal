@@ -207,6 +207,31 @@ def _sorted_entries():
     )
     return entries
 
+def _sorted_entries_by_ranking():
+    """
+    Sort entries by ranking:
+    - 1 (best) at the top, 8 (worst) at the bottom
+    - For the same ranking, show the most recent entry first
+    """
+    entries = mj.mj_get_all_entries()
+
+    def key_fn(e):
+        # Ranking: lower is better; if missing, push to bottom
+        rank = getattr(e, "ranking", None)
+        if rank is None:
+            rank = 999
+
+        # Date: newer should come first, so we use negative ordinal
+        d = getattr(e, "entry_date", None)
+        if d is None:
+            date_ordinal = -10**9  # very old
+        else:
+            date_ordinal = -d.toordinal()
+
+        return (rank, date_ordinal)
+
+    entries.sort(key=key_fn)
+    return entries
 
 def _build_report_dict(title: str, counts: list[int], start: date, end: date) -> dict:
     total = sum(counts)
@@ -335,7 +360,14 @@ def _tag_context(selected_tag: str | None = None) -> dict:
 
 @app.route("/")
 def index():
-    entries = _sorted_entries()
+    # NEW: detect sort type
+    sort_mode = request.args.get("sort", "date")
+
+    if sort_mode == "ranking":
+        entries = _sorted_entries_by_ranking()
+    else:
+        entries = _sorted_entries()  # default: newest first
+    
     today = date.today()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
