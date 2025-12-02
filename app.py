@@ -15,7 +15,7 @@ from flask import (
 
 from mood_mastery.mood_journal import Mood_Journal
 from mood_mastery.entry import BIOMETRICS, Entry
-from flask_apscheduler import APScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from notifications import NotificationManager
 from models_notification import NotificationSettings
 
@@ -93,8 +93,7 @@ with app.app_context():
 
 # ----------------- SCHEDULER SETUP -----------------
 
-scheduler = APScheduler()
-scheduler.init_app(app)
+scheduler = BackgroundScheduler()
 scheduler.start()
 
 # Load current notification schedule (if any)
