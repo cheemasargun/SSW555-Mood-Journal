@@ -356,6 +356,46 @@
       {% block modals %}{% endblock %}
 
       {% block extra_scripts %}{% endblock %}
+      <!-- 🔔 Toast Notification Box -->
+      <div id="toast-box"
+        class="fixed bottom-6 right-6 z-50 hidden opacity-0 transition-opacity duration-500">
+        <div id="toast"
+          class="bg-slate-800 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-700">
+        </div>
+      </div>
+
+      <script>
+      async function checkToast() {
+          try {
+              const res = await fetch("/notifications/ping");
+              const data = await res.json();
+
+              if (data.message) {
+                  showToast(data.message);
+
+                  await fetch("/notifications/ping-clear", { method: "POST" });
+              }
+          } catch (e) {
+              console.error("Toast check failed:", e);
+          }
+      }
+
+      function showToast(message) {
+          const box = document.getElementById("toast-box");
+          const toast = document.getElementById("toast");
+
+          toast.textContent = message;
+
+          box.classList.remove("hidden", "opacity-0");
+
+          setTimeout(() => {
+              box.classList.add("opacity-0");
+              setTimeout(() => box.classList.add("hidden"), 500);
+          }, 4000);
+      }
+
+      setInterval(checkToast, 20000);
+      </script>
     </div>
   </div>
 </body>

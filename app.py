@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 from extensions import db
 from models import MoodEntry
 
+
 from flask import (
     Flask,
     render_template,
@@ -14,6 +15,9 @@ from flask import (
 
 from mood_mastery.mood_journal import Mood_Journal
 from mood_mastery.entry import BIOMETRICS, Entry
+from flask_apscheduler import APScheduler
+from notifications import NotificationManager
+from models_notification import NotificationSettings
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "dev-key"
@@ -21,8 +25,81 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
+# ==============================
+# Toast Notification Ping Storage
+# ==============================
+from flask import jsonify
+
+# in-memory store for toast popups
+last_notification = {"message": None}
+
+# Frontend pings for new notifications
+@app.get("/notifications/ping")
+def notifications_ping():
+    return jsonify(last_notification)
+
+@app.post("/notifications/ping-clear")
+def notifications_ping_clear():
+    last_notification["message"] = None
+    return ("", 204)
+
+
+# ----------------------------
+# FORM-BASED NOTIFICATION UPDATE
+# ----------------------------
+@app.post("/notifications/update")
+def update_notifications():
+    """
+    Handles the form on the notifications page.
+    This version DOES NOT use JSON — it uses HTML form post.
+    """
+
+    enabled = request.form.get("enabled") == "on"
+    hour = int(request.form.get("hour", 20))
+    minute = int(request.form.get("minute", 0))
+
+    # Fetch or create settings
+    settings = NotificationSettings.query.first()
+    if not settings:
+        settings = NotificationSettings()
+
+    settings.enabled = enabled
+    settings.scheduled_hour = hour
+    settings.scheduled_minute = minute
+
+    db.session.add(settings)
+    db.session.commit()
+
+    # Update scheduler
+    if enabled:
+        NotificationManager.schedule_job(scheduler, last_notification)
+        flash("Daily notifications enabled.", "success")
+
+        # Toast message for frontend
+        last_notification["message"] = (
+            f"Notifications enabled! Next reminder at {hour:02d}:{minute:02d}."
+        )
+    else:
+        NotificationManager.disable_job(scheduler)
+        flash("Notifications disabled.", "info")
+        last_notification["message"] = "Notifications disabled."
+
+    return redirect(url_for("index"))
+
 with app.app_context():
     db.create_all()
+
+
+
+# ----------------- SCHEDULER SETUP -----------------
+
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
+
+# Load current notification schedule (if any)
+with app.app_context():
+    NotificationManager.schedule_job(scheduler, last_notification)
 
 # In-memory journal instance
 mj = Mood_Journal(use_database=True)
