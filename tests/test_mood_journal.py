@@ -891,3 +891,63 @@ def test_mj_search_entries():
     
     print("✅ mj_search_entries test passed!")
     print()
+
+def test_mj_find_similar_entries():
+    """
+    Test the mj_find_similar_entries method with three core test cases.
+    """
+    mj = Mood_Journal(use_database=False)
+    
+    # Create test entries
+    entry1_id = mj.mj_create_entry(
+        "Happy Birthday",
+        1, 1, 2025,
+        "Today was my birthday party!",
+        5, 95, 3,
+        tags=["celebration", "birthday"]
+    )
+    
+    entry2_id = mj.mj_create_entry(
+        "Work Stress",
+        2, 1, 2025,
+        "Difficult day at work.",
+        2, 40, 5,
+        tags=["work", "stress"]
+    )
+    
+    entry3_id = mj.mj_create_entry(
+        "Another Celebration",
+        10, 1, 2025,
+        "Celebrated with friends.",
+        5, 90, 3,
+        tags=["celebration", "friends"]
+    )
+    
+    # --- Test Case 1: Valid similar entries found ---
+    similar_entries = mj.mj_find_similar_entries(entry1_id, limit=2)
+    
+    assert len(similar_entries) == 2, f"Expected 2 similar entries, got {len(similar_entries)}"
+    
+    # Entry3 should be most similar to entry1 (same ranking, similar mood/difficulty, shared tags)
+    similar_ids = [entry[0].entry_id_str for entry in similar_entries]
+    assert entry3_id in similar_ids, "Entry3 should be similar to Entry1"
+    
+    # Verify similarity scores are valid
+    for _, score in similar_entries:
+        assert 0 <= score <= 1, f"Similarity score {score} should be between 0 and 1"
+    
+    print("✓ Test Case 1: Found valid similar entries with proper scores")
+    
+    # --- Test Case 2: Invalid entry ID returns empty list ---
+    invalid_result = mj.mj_find_similar_entries("invalid-id", limit=3)
+    assert invalid_result == [], "Invalid entry ID should return empty list"
+    print("✓ Test Case 2: Invalid entry ID returns empty list")
+    
+    # --- Test Case 3: Entry not similar to itself ---
+    all_similar = mj.mj_find_similar_entries(entry1_id, limit=10)
+    all_ids = [entry[0].entry_id_str for entry in all_similar]
+    assert entry1_id not in all_ids, "Entry should not be similar to itself"
+    print("✓ Test Case 3: Entry is not included in its own similar entries")
+    
+    print("✅ mj_find_similar_entries test passed!")
+    print()

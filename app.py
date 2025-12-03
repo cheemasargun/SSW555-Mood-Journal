@@ -453,21 +453,26 @@ def view_entry(entry_id):
     if not e:
         flash("Entry not found.", "error")
         return redirect(url_for("index"))
-
+    
+    # NEW: Get similar entries
+    similar = mj.mj_find_similar_entries(entry_id, limit=3)
+    similar_entries = [item[0] for item in similar]
+    similarity_scores = [round(item[1] * 100, 1) for item in similar]
+    
     entries = _sorted_entries()
     today = date.today()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
     mood_trends = _mood_trends_for_ui()
     difficulty_weekday = _difficulty_by_weekday()
-
+    
     view_body = None
     view_ask_password = False
     if not e.is_private_check():
         view_body = e.entry_body
     else:
         view_ask_password = True
-
+    
     return render_template(
         "index.html",
         entries=entries,
@@ -481,6 +486,8 @@ def view_entry(entry_id):
         open_view_modal=True,
         open_edit_modal=False,
         open_report_modal=False,
+        similar_entries=similar_entries,  # NEW
+        similarity_scores=similarity_scores,  # NEW
         mood_trends=mood_trends,
         difficulty_weekday=difficulty_weekday,
         **tag_ctx,
@@ -953,6 +960,65 @@ def emoji_groups():
         difficulty_weekday=difficulty_weekday,
         **tag_ctx,
     )
+
+@app.get("/entries/<entry_id>/similar")
+def similar_entries(entry_id):
+    """Show entries similar to the selected one"""
+    try:
+        # Get the target entry
+        e = mj.mj_get_entry(entry_id)
+        if not e:
+            flash("Entry not found.", "error")
+            return redirect(url_for("index"))
+        
+        # Get similar entries
+        similar = mj.mj_find_similar_entries(entry_id, limit=3)
+        
+        similar_entries = [item[0] for item in similar] if similar else []
+        similarity_scores = [round(item[1] * 100, 1) for item in similar] if similar else []
+        
+        # Get other required data
+        all_entries = _sorted_entries()
+        today = date.today()
+        summary = _streak_summary_for_ui()
+        tag_ctx = _tag_context()
+        mood_trends = _mood_trends_for_ui()
+        difficulty_weekday = _difficulty_by_weekday()
+        
+        # Determine if we should show the entry body
+        view_body = None
+        view_ask_password = False
+        if not e.is_private_check():
+            view_body = e.entry_body
+        elif ENTRY_PASSWORD is not None:
+            view_ask_password = True
+        
+        return render_template(
+            "index.html",
+            entries=all_entries,
+            today=today,
+            summary=summary,
+            password_set=(ENTRY_PASSWORD is not None),
+            view_e=e,
+            view_body=view_body,
+            view_ask_password=view_ask_password,
+            view_excluded=getattr(e, "excluded_from_reports", False),
+            open_view_modal=True,
+            open_edit_modal=False,
+            open_report_modal=False,
+            similar_entries=similar_entries,
+            similarity_scores=similarity_scores,
+            mood_trends=mood_trends,
+            difficulty_weekday=difficulty_weekday,
+            **tag_ctx,
+        )
+        
+    except Exception as ex:
+        # Log the error for debugging
+        app.logger.error(f"Error in similar_entries for entry_id {entry_id}: {str(ex)}")
+        flash(f"Error finding similar entries: {str(ex)}", "error")
+        return redirect(url_for("index"))
+    
 
 
 @app.get("/emoji-groups/<int:emoji_rank>")

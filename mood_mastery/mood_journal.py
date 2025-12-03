@@ -1028,3 +1028,99 @@ class Mood_Journal:
         )
         
         return results
+    
+    def mj_find_similar_entries(self, entry_id_str: str, limit: int = 3) -> List[Tuple[Entry, float]]:
+        """
+        Find the N most similar entries to a given entry.
+        Returns a list of (entry, similarity_score) tuples sorted by similarity.
+        
+        Similarity is calculated based on:
+        - Mood rating (0-100, 30% weight)
+        - Ranking (1-8, 30% weight)
+        - Difficulty ranking (1-5, 20% weight)
+        - Shared tags (10% weight)
+        - Date proximity (10% weight) - entries closer in time are more similar
+        
+        Parameters -------------------------
+        - entry_id_str : str        // The id of the entry to find similar entries for
+        - limit : int              // Maximum number of similar entries to return
+        """
+        self._ensure_db_loaded()
+        
+        # Get the target entry
+        target_entry = self.entries_dict.get(entry_id_str)
+        if not target_entry:
+            return []
+        
+        # Normalize weights (sum to 1.0)
+        weights = {
+            'mood': 0.3,
+            'ranking': 0.3,
+            'difficulty': 0.2,
+            'tags': 0.1,
+            'date': 0.1
+        }
+        
+        # Calculate similarity for each other entry
+        similarities = []
+        target_date = self._to_date(target_entry.entry_date)
+        
+        for entry_id, entry in self.entries_dict.items():
+            # Skip the target entry itself
+            if entry_id == entry_id_str:
+                continue
+            
+            entry_date = self._to_date(entry.entry_date)
+            
+            # 1. Mood rating similarity (0-1)
+            mood_diff = abs(target_entry.mood_rating - entry.mood_rating)
+            mood_sim = 1.0 - (mood_diff / 100.0)
+            
+            # 2. Ranking similarity (0-1)
+            ranking_diff = abs(target_entry.ranking - entry.ranking)
+            ranking_sim = 1.0 - (ranking_diff / 7.0)  # 8 rankings, max diff = 7
+            
+            # 3. Difficulty similarity (0-1)
+            target_diff = getattr(target_entry, 'difficulty_ranking', 3)
+            entry_diff = getattr(entry, 'difficulty_ranking', 3)
+            # If difficulty ranking is not set (-999), use default of 3
+            if target_diff == -999:
+                target_diff = 3
+            if entry_diff == -999:
+                entry_diff = 3
+            
+            difficulty_diff = abs(target_diff - entry_diff)
+            difficulty_sim = 1.0 - (difficulty_diff / 4.0)  # 5 difficulty levels, max diff = 4
+            
+            # 4. Tag similarity (Jaccard index)
+            target_tags = set(getattr(target_entry, 'tags', []))
+            entry_tags = set(getattr(entry, 'tags', []))
+            
+            if target_tags or entry_tags:
+                intersection = len(target_tags.intersection(entry_tags))
+                union = len(target_tags.union(entry_tags))
+                tag_sim = intersection / union if union > 0 else 0.0
+            else:
+                tag_sim = 1.0  # Both have no tags = perfect match
+                
+            # 5. Date proximity similarity (0-1)
+            # Days difference capped at 365 (one year)
+            days_diff = abs((target_date - entry_date).days)
+            date_sim = 1.0 - min(days_diff / 365.0, 1.0)
+            
+            # Calculate weighted similarity score
+            total_similarity = (
+                mood_sim * weights['mood'] +
+                ranking_sim * weights['ranking'] +
+                difficulty_sim * weights['difficulty'] +
+                tag_sim * weights['tags'] +
+                date_sim * weights['date']
+            )
+            
+            similarities.append((entry, total_similarity))
+        
+        # Sort by similarity score (highest first) and return top N
+        similarities.sort(key=lambda x: x[1], reverse=True)
+        
+        # Return the top N entries with their similarity scores
+        return similarities[:limit]
