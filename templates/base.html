@@ -297,21 +297,23 @@
                       class="px-2 py-1 rounded-lg border border-rose-700 text-rose-200 hover:text-rose-100 hover:border-rose-500">
                 Clear Data
               </button>
-            </nav>
+          </nav>
 
-            <!-- Search Bar -->
-            <form method="get" action="{{ url_for('search_entries') }}" class="flex items-center gap-1 ml-2">
-                <input type="text" 
-                      name="q" 
-                      value="{{ search_query|default('') }}"
-                      placeholder="Search entries..." 
-                      class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-50 w-32 sm:w-40"
-                      aria-label="Search entries">
-                <button type="submit" 
-                        class="rounded-lg px-2 py-1 mj-accent-btn text-xs">
-                    🔍
-                </button>
-            </form>
+          <!-- Search Bar -->
+          <form method="get" action="{{ url_for('search_entries') }}" class="flex items-center gap-1 ml-2">
+              <input type="text" 
+                    name="q" 
+                    value="{{ search_query|default('') }}"
+                    placeholder="Search entries..." 
+                    class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-50 w-32 sm:w-40"
+                    aria-label="Search entries">
+              <button type="submit" 
+                      class="rounded-lg px-2 py-1 mj-accent-btn text-xs">
+                  🔍
+              </button>
+          </form>
+
+
 
             <!-- Right side: Theme picker + Dark/Light toggle -->
             <div class="flex items-center gap-3">

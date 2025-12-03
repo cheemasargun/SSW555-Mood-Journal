@@ -769,7 +769,86 @@
           {% endif %}
         {% endif %}
       </div>
-
+      {% if similar_entries is defined and similar_entries %}
+      <div class="px-6 pb-4">
+          <h4 class="font-semibold text-slate-100 mb-3">Similar Entries</h4>
+          <p class="text-xs text-slate-400 mb-3">
+              Based on mood rating, ranking, difficulty, tags, and date proximity.
+          </p>
+          
+          <div class="space-y-3">
+              {% for i in range(similar_entries|length) %}
+              {% set similar_entry = similar_entries[i] %}
+              {% set similarity_score = similarity_scores[i] %}
+              <div class="mj-card-soft rounded-xl p-4 border border-slate-700">
+                  <div class="flex items-start justify-between mb-2">
+                      <div class="flex items-start gap-3">
+                          <div class="text-2xl leading-none">{{ ranking_emoji(similar_entry.ranking) }}</div>
+                          <div>
+                              <div class="flex items-center gap-2 flex-wrap">
+                                  <span class="font-medium text-slate-50">{{ similar_entry.entry_name }}</span>
+                                  <span class="text-xs text-slate-300">({{ similarity_score }}% similar)</span>
+                              </div>
+                              <p class="text-[11px] text-slate-400 mt-0.5">
+                                  {{ similar_entry.entry_date.isoformat() }}
+                                  • Mood: {{ similar_entry.mood_rating }}
+                                  {% if similar_entry.difficulty_ranking is not none and similar_entry.difficulty_ranking != -999 %}
+                                      • Difficulty: {{ similar_entry.difficulty_ranking }}/5
+                                  {% endif %}
+                              </p>
+                              
+                              {% if similar_entry.tags %}
+                                  <div class="mt-2 flex flex-wrap gap-1">
+                                      {% for t in similar_entry.tags %}
+                                          <span class="text-[10px] bg-slate-800 text-slate-200 rounded-full px-2 py-0.5">
+                                              #{{ t }}
+                                          </span>
+                                      {% endfor %}
+                                  </div>
+                              {% endif %}
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <div class="flex items-center gap-2">
+                      <a href="{{ url_for('view_entry', entry_id=similar_entry.entry_id_str) }}"
+                        class="rounded-lg px-3 py-1 text-xs bg-slate-100 text-slate-900 hover:bg-slate-200">
+                          View
+                      </a>
+                      <a href="{{ url_for('edit_entry_open', entry_id=similar_entry.entry_id_str) }}"
+                        class="rounded-lg px-3 py-1 text-xs mj-accent-btn">
+                          Edit
+                      </a>
+                      <a href="{{ url_for('similar_entries', entry_id=similar_entry.entry_id_str) }}"
+                        class="rounded-lg px-3 py-1 text-xs bg-slate-800 text-slate-100 hover:bg-slate-700">
+                          Edit
+                        </a>
+                        <!-- Exclude / Include from reports -->
+                        <form method="post"
+                              action="{{ url_for('toggle_exclude_entry', entry_id=similar_entry.entry_id_str) }}"
+                              onclick="event.stopPropagation();">
+                            <input type="hidden" name="exclude" value="{{ 0 if excluded else 1 }}">
+                            <button type="submit"
+                                    class="rounded-lg px-3 py-1.5 text-[11px] sm:text-xs bg-slate-800 text-slate-100 hover:bg-slate-700">
+                                {% if excluded %}
+                                    Include in reports
+                                {% else %}
+                                    Exclude from reports
+                                {% endif %}
+                            </button>
+                        </form>
+                  </div>
+              </div>
+              {% endfor %}
+          </div>
+          
+          {% if similar_entries|length == 0 %}
+          <p class="text-sm text-slate-400 text-center py-4">
+              No similar entries found.
+          </p>
+          {% endif %}
+      </div>
+      {% endif %}
       <!-- Footer actions -->
       <div class="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex items-center gap-3 flex-wrap">
         {% if not view_e.is_private_check() %}
