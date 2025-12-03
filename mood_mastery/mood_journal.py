@@ -943,3 +943,88 @@ class Mood_Journal:
         }
 
         return mood_graph_trends
+
+    def mj_search_entries(self, search: str) -> List[Entry]:
+        """
+        Search entries for matching text in body, title, tags, or rating.
+        Returns a list of matching entries sorted by date (newest first).
+        
+        Parameters -------------------------
+        - search : str        // The search string to look for in entries
+        """
+        self._ensure_db_loaded()
+        
+        # If search is empty, return empty list
+        if not search or not search.strip():
+            return []
+        
+        search = search.strip().lower()
+        results = []
+        
+        for entry in self.entries_dict.values():
+            found = False
+            
+            # Search in entry body (case-insensitive)
+            if search in entry.entry_body.lower():
+                found = True
+            
+            # Search in entry name/title (case-insensitive)
+            elif search in entry.entry_name.lower():
+                found = True
+            
+            # Search in tags (already lowercase from Entry class)
+            elif hasattr(entry, 'tags'):
+                for tag in entry.tags:
+                    if search in tag:
+                        found = True
+                        break
+            
+            # Search in ranking emoji or ranking number
+            elif search.isdigit():
+                # Check if search matches the ranking number
+                if int(search) == entry.ranking:
+                    found = True
+                # Check if search matches the mood rating
+                elif int(search) == entry.mood_rating:
+                    found = True
+                # Check if search matches the difficulty ranking
+                elif hasattr(entry, 'difficulty_ranking') and int(search) == entry.difficulty_ranking:
+                    found = True
+            else:
+                # Try to search in ranking emoji text representation
+                try:
+                    ranking_emoji = entry.determine_ranking_emoji()
+                    if search in ranking_emoji.lower():
+                        found = True
+                except:
+                    pass
+            
+            # Search in date components
+            try:
+                date_str = entry.entry_date.strftime("%Y-%m-%d")
+                if search in date_str:
+                    found = True
+            except:
+                pass
+            
+            # Search in biometrics
+            if hasattr(entry, 'biometrics'):
+                for biometric_key, biometric_value in entry.biometrics.items():
+                    if search in biometric_key.lower() or search in biometric_value.lower():
+                        found = True
+                        break
+            
+            if found:
+                results.append(entry)
+        
+        # Sort results by date (newest first), then by name
+        results.sort(
+            key=lambda e: (
+                self._entry_date(e),
+                getattr(e, "entry_name", ""),
+                getattr(e, "entry_id_str", ""),
+            ),
+            reverse=True  # Newest first
+        )
+        
+        return results

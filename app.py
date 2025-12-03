@@ -361,7 +361,10 @@ def _tag_context(selected_tag: str | None = None) -> dict:
 def index():
     # NEW: detect sort type
     sort_mode = request.args.get("sort", "date")
-
+    
+    # NEW: get search query if any
+    search_query = request.args.get("q", "")
+    
     if sort_mode == "ranking":
         entries = _sorted_entries_by_ranking()
     else:
@@ -370,10 +373,10 @@ def index():
     today = date.today()
     summary = _streak_summary_for_ui()
     tag_ctx = _tag_context()
-
+    
     mood_trends = _mood_trends_for_ui()
     difficulty_weekday = _difficulty_by_weekday()
-
+    
     return render_template(
         "index.html",
         entries=entries,
@@ -385,6 +388,7 @@ def index():
         open_report_modal=False,
         mood_trends=mood_trends,
         difficulty_weekday=difficulty_weekday,
+        search_query=search_query,  # ADD THIS LINE
         **tag_ctx,
     )
 
@@ -551,6 +555,40 @@ def edit_entry_open(entry_id):
         **tag_ctx,
     )
 
+@app.route("/search", methods=["GET", "POST"])
+def search_entries():
+    """Search entries by text in body, title, tags, or rating"""
+    search_query = request.args.get("q", "").strip()
+    
+    if request.method == "POST":
+        search_query = request.form.get("search", "").strip()
+        if search_query:
+            return redirect(url_for("search_entries", q=search_query))
+    
+    entries = []
+    if search_query:
+        entries = mj.mj_search_entries(search_query)
+    
+    today = date.today()
+    summary = _streak_summary_for_ui()
+    tag_ctx = _tag_context()
+    mood_trends = _mood_trends_for_ui()
+    difficulty_weekday = _difficulty_by_weekday()
+    
+    return render_template(
+        "index.html",
+        entries=entries,
+        today=today,
+        summary=summary,
+        password_set=(ENTRY_PASSWORD is not None),
+        open_view_modal=False,
+        open_edit_modal=False,
+        open_report_modal=False,
+        mood_trends=mood_trends,
+        difficulty_weekday=difficulty_weekday,
+        search_query=search_query,
+        **tag_ctx,
+    )
 
 @app.post("/entries/<entry_id>/edit")
 def edit_entry_save(entry_id):
