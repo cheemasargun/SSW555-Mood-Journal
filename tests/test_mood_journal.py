@@ -838,3 +838,56 @@ def test_monthly_report_respects_exclusion_and_toggle():
     mj.mj_set_entry_excluded_from_reports(id2, False)
     result = mj.mj_monthly_report(28, 2, 2025)
     assert result == [2, 0, 0, 0, 0, 0, 0, 0]
+
+def test_mj_search_entries():
+    """
+    Test the mj_search_entries method.
+    """
+    mj = Mood_Journal(use_database=False)
+    
+    # Create test entries
+    entry1_id = mj.mj_create_entry(
+        "Happy Birthday",
+        1, 1, 2025,
+        "Today was my birthday party!",
+        5, 95, 10,
+        tags=["celebration", "birthday"]
+    )
+    
+    entry2_id = mj.mj_create_entry(
+        "Work Stress",
+        2, 1, 2025,
+        "Difficult day at work.",
+        2, 40, 80,
+        tags=["work", "stress"]
+    )
+    
+    entry3_id = mj.mj_create_entry(
+        "Gym Session",
+        3, 1, 2025,
+        "Great workout at the gym.",
+        1, 85, 30,
+        tags=["exercise", "gym"]
+    )
+    
+    # --- Test Case 1: Search in entry body text ---
+    results = mj.mj_search_entries("work")
+    assert len(results) == 2  # Should find "Work Stress" and "Gym Session"
+    print(f"✓ Found {len(results)} entries containing 'work'")
+    
+    # --- Test Case 2: Search in title and tags ---
+    results = mj.mj_search_entries("birthday")
+    assert len(results) == 1
+    assert results[0].entry_name == "Happy Birthday"
+    print(f"✓ Found entry with 'birthday' in title/tags")
+    
+    # --- Test Case 3: Empty and non-existent searches ---
+    results = mj.mj_search_entries("")
+    assert results == []
+    
+    results = mj.mj_search_entries("nonexistent")
+    assert results == []
+    print(f"✓ Empty/non-existent searches return empty list")
+    
+    print("✅ mj_search_entries test passed!")
+    print()

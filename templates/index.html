@@ -244,37 +244,48 @@
   <div class="mj-card rounded-xl shadow-sm border p-6">
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-2">
-        <span class="text-xl">🌙</span>
-        <h3 class="text-lg font-semibold text-slate-50">Your Entries</h3>
-        <!-- Sort Mode Buttons -->
-        <div class="flex items-center gap-2 ml-4">
-          <a href="{{ url_for('index', sort='date') }}"
-            class="rounded-lg px-3 py-1 text-xs sm:text-sm border
-            {% if sort_mode == 'date' %}
-              mj-accent-btn
-            {% else %}
-              bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800
-            {% endif %}">
-            📅 Newest First
-          </a>
+          <span class="text-xl">🌙</span>
+          {% if search_query %}
+              <h3 class="text-lg font-semibold text-slate-50">Search Results for "{{ search_query }}"</h3>
+              <a href="{{ url_for('index') }}" 
+                class="text-xs text-slate-300 hover:text-slate-100 underline ml-2">
+                  Clear search
+              </a>
+          {% else %}
+              <h3 class="text-lg font-semibold text-slate-50">Your Entries</h3>
+          {% endif %}
+          <!-- Sort Mode Buttons -->
+          <div class="flex items-center gap-2 ml-4">
+              <a href="{{ url_for('index', sort='date', q=search_query|default('')) }}"
+                  class="rounded-lg px-3 py-1 text-xs sm:text-sm border
+                  {% if sort_mode == 'date' %}
+                      mj-accent-btn
+                  {% else %}
+                      bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800
+                  {% endif %}">
+                  📅 Newest First
+              </a>
 
-          <a href="{{ url_for('index', sort='ranking') }}"
-            class="rounded-lg px-3 py-1 text-xs sm:text-sm border
-            {% if sort_mode == 'ranking' %}
-              mj-accent-btn
-            {% else %}
-              bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800
-            {% endif %}">
-            ⭐ Sort by Ranking
-          </a>
-        </div>
+              <a href="{{ url_for('index', sort='ranking', q=search_query|default('')) }}"
+                  class="rounded-lg px-3 py-1 text-xs sm:text-sm border
+                  {% if sort_mode == 'ranking' %}
+                      mj-accent-btn
+                  {% else %}
+                      bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800
+                  {% endif %}">
+                  ⭐ Sort by Ranking
+              </a>
+          </div>
       </div>
       {% if entries %}
-        <span class="text-sm text-slate-300">
-          {{ entries|length }} entr{{ 'ies' if entries|length != 1 else 'y' }}
-        </span>
+          <span class="text-sm text-slate-300">
+              {{ entries|length }} entr{{ 'ies' if entries|length != 1 else 'y' }}
+              {% if search_query %}
+                  found
+              {% endif %}
+          </span>
       {% endif %}
-    </div>
+  </div>
 
     {% if entries %}
       <div class="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
@@ -393,14 +404,26 @@
       </div>
     {% else %}
       <div class="text-center py-12">
-        <div class="inline-flex items-center justify-center w-16 h-16 bg-slate-900 rounded-full mb-4 border border-slate-700">
-          <span class="text-2xl">☁️</span>
-        </div>
-        <p class="text-slate-300 text-sm">
-          No entries yet. Click “Add Entry” to start your journal.
-        </p>
+          <div class="inline-flex items-center justify-center w-16 h-16 bg-slate-900 rounded-full mb-4 border border-slate-700">
+              <span class="text-2xl">
+                  {% if search_query %}🔍{% else %}☁️{% endif %}
+              </span>
+          </div>
+          <p class="text-slate-300 text-sm">
+              {% if search_query %}
+                  No entries found for "{{ search_query }}".
+              {% else %}
+                  No entries yet. Click "Add Entry" to start your journal.
+              {% endif %}
+          </p>
+          {% if search_query %}
+              <a href="{{ url_for('index') }}" 
+                class="mt-4 inline-block rounded-xl px-4 py-2 mj-accent-btn text-sm">
+                  View All Entries
+              </a>
+          {% endif %}
       </div>
-    {% endif %}
+  {% endif %}
   </div>
 </div>
 
